@@ -63,6 +63,21 @@ check_requirements() {
         exit 1
     fi
     
+    # Check if we're in a writable environment
+    if [[ ! -w "/tmp" ]]; then
+        print_warning "Limited write access detected - some features may not work"
+    fi
+    
+    # Check if systemd is available
+    if ! command -v systemctl &> /dev/null; then
+        print_warning "systemctl not found - service management may be limited"
+    fi
+    
+    # Check if Python is available
+    if ! command -v python3 &> /dev/null; then
+        print_warning "python3 not found - will need to install Python dependencies"
+    fi
+    
     print_success "System requirements check passed"
 }
 
@@ -233,7 +248,10 @@ create_fallback_config() {
     fi
     
     # Create a simple systemd service for the AI agent
-    sudo tee /etc/systemd/system/nixos-agent.service > /dev/null << EOF
+    # Note: In NixOS, systemd services are typically managed through configuration.nix
+    # This is a fallback for systems where /etc/systemd/system is writable
+    if [ -w "/etc/systemd/system" ]; then
+        sudo tee /etc/systemd/system/nixos-agent.service > /dev/null << EOF
 [Unit]
 Description=NixOS AI Agent
 After=network.target
@@ -251,8 +269,11 @@ EnvironmentFile=/etc/nixos-agent/.env
 [Install]
 WantedBy=multi-user.target
 EOF
-
-    print_success "Fallback configuration created with user: $SERVICE_USER"
+        print_success "Fallback configuration created with user: $SERVICE_USER"
+    else
+        print_warning "Cannot write to /etc/systemd/system (read-only filesystem)"
+        print_status "Service will be managed through NixOS configuration instead"
+    fi
 }
 
 # Function to create NixOS configuration snippet
@@ -313,6 +334,40 @@ EOF
 
     print_success "NixOS configuration snippet created at /etc/nixos-agent/nixos-config-snippet.nix"
     print_status "You can add this to your /etc/nixos/configuration.nix and rebuild"
+}
+
+# Function to create manual startup script
+create_startup_script() {
+    print_status "Creating manual startup script..."
+    
+    # Create a simple startup script for immediate testing
+    sudo tee /opt/nixos-agent/start-ai-agent.sh > /dev/null << 'EOF'
+#!/bin/bash
+# Manual startup script for NixOS AI Agent
+
+echo "Starting NixOS AI Agent manually..."
+
+# Check if user exists
+if ! id "nixos-agent" &>/dev/null; then
+    echo "Error: nixos-agent user not found"
+    echo "Please add the configuration snippet to /etc/nixos/configuration.nix and rebuild"
+    exit 1
+fi
+
+# Check if Python dependencies are available
+if ! python3 -c "import fastapi" &>/dev/null; then
+    echo "Installing Python dependencies..."
+    pip3 install --user fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2
+fi
+
+# Start the AI agent
+echo "Starting AI agent as nixos-agent user..."
+sudo -u nixos-agent python3 /opt/nixos-agent/ai-agent/agent.py --mode=chat
+
+EOF
+
+    sudo chmod +x /opt/nixos-agent/start-ai-agent.sh
+    print_success "Manual startup script created at /opt/nixos-agent/start-ai-agent.sh"
 }
 
 # Function to install Python dependencies
@@ -440,7 +495,9 @@ start_services() {
             print_warning "AI agent service may not be running. Check with: systemctl status nixos-agent"
         fi
     else
-        print_warning "Service file not found. The AI agent will be available after reboot."
+        print_warning "Service file not found (read-only filesystem detected)"
+        print_status "In NixOS, services are managed through configuration.nix"
+        print_status "The AI agent will be available after adding the configuration snippet and rebuilding"
         print_status "You can start it manually with: sudo systemctl start nixos-agent"
     fi
 }
@@ -502,6 +559,11 @@ show_final_instructions() {
     echo "  • Add to /etc/nixos/configuration.nix and rebuild for proper user management"
     echo "  • Rebuild: sudo nixos-rebuild switch"
     echo
+    echo "🚀 Quick Start (Manual):"
+    echo "  • Start AI agent: /opt/nixos-agent/start-ai-agent.sh"
+    echo "  • Web UI: http://127.0.0.1:8999"
+    echo "  • Chat interface: ai-chat"
+    echo
     echo "Enjoy your AI-powered NixOS desktop! 🚀"
 }
 
@@ -517,6 +579,7 @@ main() {
     create_user_and_directories
     create_fallback_config
     create_nixos_config_snippet
+    create_startup_script
     install_python_deps
     copy_ai_agent_files
     setup_git_repo
