@@ -134,9 +134,18 @@ get_user_input() {
     print_success "User configuration completed"
 }
 
-# Function to create directories
-create_directories() {
-    print_status "Creating directories..."
+# Function to create user and directories
+create_user_and_directories() {
+    print_status "Creating user and directories..."
+    
+    # Create nixos-agent user if it doesn't exist
+    if ! id "nixos-agent" &>/dev/null; then
+        print_status "Creating nixos-agent user..."
+        sudo useradd -r -s /bin/bash -d /var/lib/nixos-agent -m nixos-agent
+        print_success "nixos-agent user created"
+    else
+        print_status "nixos-agent user already exists"
+    fi
     
     # Create necessary directories
     sudo mkdir -p /var/lib/nixos-agent
@@ -150,7 +159,7 @@ create_directories() {
     sudo chmod 755 /etc/nixos-agent
     sudo chmod 755 /opt/nixos-agent
     
-    print_success "Directories created"
+    print_success "User and directories created"
 }
 
 # Function to create fallback configuration
@@ -202,7 +211,15 @@ copy_ai_agent_files() {
     # Copy AI agent files to /opt/nixos-agent
     if [[ -d "ai-agent" ]]; then
         sudo cp -r ai-agent/* /opt/nixos-agent/
-        sudo chown -R nixos-agent:nixos-agent /opt/nixos-agent
+        
+        # Set ownership only if user exists
+        if id "nixos-agent" &>/dev/null; then
+            sudo chown -R nixos-agent:nixos-agent /opt/nixos-agent
+        else
+            print_warning "nixos-agent user not found, setting root ownership"
+            sudo chown -R root:root /opt/nixos-agent
+        fi
+        
         sudo chmod +x /opt/nixos-agent/bin/* 2>/dev/null || true
         print_success "AI agent files copied"
     else
@@ -366,7 +383,7 @@ main() {
     check_root
     check_requirements
     get_user_input
-    create_directories
+    create_user_and_directories
     create_fallback_config
     install_python_deps
     copy_ai_agent_files
