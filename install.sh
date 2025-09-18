@@ -526,28 +526,49 @@ setup_repository() {
 install_python_deps() {
     print_status "Installing Python dependencies..."
     
-    # Use the Python installer script for better error handling
-    if [[ -f "/opt/nixos-agent/install_deps.py" ]]; then
-        print_status "Using Python dependency installer script..."
-        if python3 /opt/nixos-agent/install_deps.py; then
+    # Create a virtual environment first
+    print_status "Creating Python virtual environment..."
+    if command -v python3 &> /dev/null; then
+        # Create virtual environment
+        sudo mkdir -p /opt/nixos-agent/venv
+        if sudo python3 -m venv /opt/nixos-agent/venv; then
+            print_success "Virtual environment created"
+            
+            # Install packages in virtual environment
+            print_status "Installing packages in virtual environment..."
+            PACKAGES=("fastapi" "uvicorn" "websockets" "openai" "google-generativeai" "gitpython" "pyyaml" "requests" "aiofiles" "python-multipart" "jinja2")
+            
+            for package in "${PACKAGES[@]}"; do
+                print_status "Installing $package..."
+                if sudo /opt/nixos-agent/venv/bin/pip install "$package" --no-cache-dir; then
+                    print_success "✓ Installed $package"
+                else
+                    print_warning "✗ Failed to install $package"
+                fi
+            done
+            
+            # Set proper ownership
+            if id "nixos-agent" &>/dev/null; then
+                sudo chown -R nixos-agent:nixos-agent /opt/nixos-agent/venv
+            else
+                sudo chown -R root:root /opt/nixos-agent/venv
+            fi
+            
             print_success "Python dependencies installation completed"
         else
-            print_warning "Python dependency installer had some issues, but continuing..."
+            print_warning "Failed to create virtual environment, trying alternative approach..."
+            
+            # Try with --break-system-packages
+            print_status "Trying with --break-system-packages flag..."
+            if pip3 install --user --break-system-packages fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2; then
+                print_success "Python dependencies installed with --break-system-packages"
+            else
+                print_warning "All installation methods failed, but continuing..."
+                print_status "You can install dependencies manually later"
+            fi
         fi
     else
-        print_warning "Python installer script not found, trying manual installation..."
-        
-        # Fallback to manual installation
-        if command -v pip3 &> /dev/null; then
-            print_status "Trying manual pip installation..."
-            if pip3 install --user --break-system-packages fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2 2>/dev/null; then
-                print_success "Python dependencies installed manually"
-            else
-                print_warning "Manual installation failed, dependencies will need to be installed manually"
-            fi
-        else
-            print_warning "pip3 not available, skipping Python dependency installation"
-        fi
+        print_warning "python3 not available, skipping Python dependency installation"
     fi
 }
 
@@ -555,8 +576,47 @@ install_python_deps() {
 copy_ai_agent_files() {
     print_status "Copying AI agent files..."
     
-    # Copy AI agent files to /opt/nixos-agent
-    if [[ -d "ai-agent" ]]; then
+    # Create basic AI agent structure if it doesn't exist
+    if [[ ! -d "ai-agent" ]]; then
+        print_status "Creating basic AI agent structure..."
+        sudo mkdir -p /opt/nixos-agent/ai-agent
+        sudo mkdir -p /opt/nixos-agent/bin
+        
+        # Create a basic agent.py file
+        sudo tee /opt/nixos-agent/ai-agent/agent.py > /dev/null << 'EOF'
+#!/usr/bin/env python3
+"""
+NixOS AI Agent - Basic Implementation
+"""
+
+import sys
+import os
+
+def main():
+    print("NixOS AI Agent - Basic Version")
+    print("This is a placeholder implementation.")
+    print("The full AI agent will be available after proper installation.")
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "--mode=chat":
+        print("Chat mode not yet implemented.")
+        print("Please run the full installation from the repository root.")
+
+if __name__ == "__main__":
+    main()
+EOF
+
+        # Create basic startup script
+        sudo tee /opt/nixos-agent/bin/ai-agent > /dev/null << 'EOF'
+#!/bin/bash
+python3 /opt/nixos-agent/ai-agent/agent.py "$@"
+EOF
+
+        sudo chmod +x /opt/nixos-agent/ai-agent/agent.py
+        sudo chmod +x /opt/nixos-agent/bin/ai-agent
+        
+        print_success "Basic AI agent structure created"
+    else
+        # Copy AI agent files to /opt/nixos-agent
         sudo cp -r ai-agent/* /opt/nixos-agent/
         
         # Set ownership only if user exists
@@ -569,8 +629,6 @@ copy_ai_agent_files() {
         
         sudo chmod +x /opt/nixos-agent/bin/* 2>/dev/null || true
         print_success "AI agent files copied"
-    else
-        print_warning "ai-agent directory not found, skipping file copy"
     fi
 }
 
