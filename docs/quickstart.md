@@ -14,15 +14,15 @@ This guide will help you get up and running with NixOS AI Hyprland in just a few
 ### Option 1: One-Command Installation (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/your-repo/nixos-ai-hyperland/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/install.sh | bash
 ```
 
 ### Option 2: Manual Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-repo/nixos-ai-hyperland.git
-   cd nixos-ai-hyperland
+   git clone https://github.com/yaseenTarek26/Smart-Nix-OS.git
+   cd Smart-Nix-OS
    ```
 
 2. **Run the installation script:**

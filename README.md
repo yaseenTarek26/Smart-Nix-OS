@@ -17,15 +17,15 @@ A complete NixOS configuration featuring Hyprland with an integrated AI agent th
 ### One-Command Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/your-repo/nixos-ai-hyperland/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/install.sh | bash
 ```
 
 ### Manual Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-repo/nixos-ai-hyperland.git
-   cd nixos-ai-hyperland
+   git clone https://github.com/yaseenTarek26/Smart-Nix-OS.git
+   cd Smart-Nix-OS
    ```
 
 2. **Run the installation script:**
@@ -198,8 +198,8 @@ journalctl -u nixos-agent -f
 
 ### Getting Help
 
-- **Issues**: [GitHub Issues](https://github.com/your-repo/nixos-ai-hyperland/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/nixos-ai-hyperland/discussions)
+- **Issues**: [GitHub Issues](https://github.com/yaseenTarek26/Smart-Nix-OS/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yaseenTarek26/Smart-Nix-OS/discussions)
 - **Discord**: [Join our Discord](https://discord.gg/your-discord)
 
 ## 🎨 Screenshots
@@ -226,7 +226,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## ⭐ Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=your-repo/nixos-ai-hyperland&type=Date)](https://star-history.com/#your-repo/nixos-ai-hyperland&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=yaseenTarek26/Smart-Nix-OS&type=Date)](https://star-history.com/#yaseenTarek26/Smart-Nix-OS&Date)
 
 ---
 
