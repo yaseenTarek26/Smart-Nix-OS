@@ -407,46 +407,108 @@ EOF
     print_success "Python requirements file created at /opt/nixos-agent/requirements.txt"
 }
 
+# Function to create a Python dependency installer script
+create_python_installer() {
+    print_status "Creating Python dependency installer script..."
+    
+    # Create a Python script that handles dependency installation
+    sudo tee /opt/nixos-agent/install_deps.py > /dev/null << 'EOF'
+#!/usr/bin/env python3
+"""
+Python dependency installer for NixOS AI Agent
+Handles externally managed environment issues
+"""
+
+import subprocess
+import sys
+import os
+
+def run_command(cmd, check=True):
+    """Run a command and return success status"""
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        if check and result.returncode != 0:
+            print(f"Command failed: {cmd}")
+            print(f"Error: {result.stderr}")
+            return False
+        return result.returncode == 0
+    except Exception as e:
+        print(f"Exception running command {cmd}: {e}")
+        return False
+
+def install_dependencies():
+    """Install Python dependencies using various methods"""
+    packages = [
+        "fastapi", "uvicorn", "websockets", "openai", "google-generativeai",
+        "gitpython", "pyyaml", "requests", "aiofiles", "python-multipart", "jinja2"
+    ]
+    
+    print("Installing Python dependencies...")
+    
+    # Method 1: Try virtual environment
+    if os.path.exists("/opt/nixos-agent/venv/bin/python"):
+        print("Using virtual environment...")
+        for package in packages:
+            cmd = f"/opt/nixos-agent/venv/bin/pip install {package}"
+            if run_command(cmd, check=False):
+                print(f"✓ Installed {package}")
+            else:
+                print(f"✗ Failed to install {package}")
+        return True
+    
+    # Method 2: Try user install
+    print("Trying user install...")
+    for package in packages:
+        cmd = f"python3 -m pip install --user {package}"
+        if run_command(cmd, check=False):
+            print(f"✓ Installed {package}")
+        else:
+            print(f"✗ Failed to install {package}")
+    
+    # Method 3: Try with --break-system-packages
+    print("Trying with --break-system-packages...")
+    for package in packages:
+        cmd = f"python3 -m pip install --user --break-system-packages {package}"
+        if run_command(cmd, check=False):
+            print(f"✓ Installed {package}")
+        else:
+            print(f"✗ Failed to install {package}")
+    
+    return True
+
+if __name__ == "__main__":
+    install_dependencies()
+EOF
+
+    sudo chmod +x /opt/nixos-agent/install_deps.py
+    print_success "Python dependency installer created at /opt/nixos-agent/install_deps.py"
+}
+
 # Function to install Python dependencies
 install_python_deps() {
     print_status "Installing Python dependencies..."
     
-    # Check if we're in a NixOS environment with externally managed Python
-    if python3 -c "import sys; print('externally-managed' in str(sys.path))" 2>/dev/null | grep -q "True"; then
-        print_warning "Detected externally managed Python environment (NixOS)"
-        print_status "Python dependencies will be managed through NixOS configuration"
-        print_status "Creating virtual environment for Python packages..."
-        
-        # Create a virtual environment for Python packages
-        if command -v python3 &> /dev/null; then
-            # Create virtual environment in a writable location
-            sudo mkdir -p /opt/nixos-agent/venv
-            sudo python3 -m venv /opt/nixos-agent/venv
-            
-            # Install packages in virtual environment
-            sudo /opt/nixos-agent/venv/bin/pip install --upgrade pip
-            sudo /opt/nixos-agent/venv/bin/pip install fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2
-            
-            # Set proper ownership
-            if id "nixos-agent" &>/dev/null; then
-                sudo chown -R nixos-agent:nixos-agent /opt/nixos-agent/venv
-            else
-                sudo chown -R root:root /opt/nixos-agent/venv
-            fi
-            
-            print_success "Python dependencies installed in virtual environment"
+    # Use the Python installer script for better error handling
+    if [[ -f "/opt/nixos-agent/install_deps.py" ]]; then
+        print_status "Using Python dependency installer script..."
+        if python3 /opt/nixos-agent/install_deps.py; then
+            print_success "Python dependencies installation completed"
         else
-            print_warning "python3 not found, Python dependencies will need to be installed manually"
+            print_warning "Python dependency installer had some issues, but continuing..."
         fi
     else
-        # Try standard pip install
+        print_warning "Python installer script not found, trying manual installation..."
+        
+        # Fallback to manual installation
         if command -v pip3 &> /dev/null; then
-            print_status "Installing Python packages with pip3..."
-            pip3 install --user fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2
-            print_success "Python dependencies installed"
+            print_status "Trying manual pip installation..."
+            if pip3 install --user --break-system-packages fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2 2>/dev/null; then
+                print_success "Python dependencies installed manually"
+            else
+                print_warning "Manual installation failed, dependencies will need to be installed manually"
+            fi
         else
             print_warning "pip3 not available, skipping Python dependency installation"
-            print_status "You may need to install dependencies manually"
         fi
     fi
 }
@@ -647,6 +709,7 @@ main() {
     create_nixos_config_snippet
     create_startup_script
     create_requirements_file
+    create_python_installer
     install_python_deps
     copy_ai_agent_files
     setup_git_repo
