@@ -138,21 +138,52 @@ get_user_input() {
 create_user_and_directories() {
     print_status "Creating user and directories..."
     
+    # Create nixos-agent group first if it doesn't exist
+    if ! getent group "nixos-agent" &>/dev/null; then
+        print_status "Creating nixos-agent group..."
+        if command -v groupadd &> /dev/null; then
+            sudo groupadd nixos-agent 2>/dev/null || true
+        elif command -v addgroup &> /dev/null; then
+            sudo addgroup nixos-agent 2>/dev/null || true
+        else
+            print_warning "Cannot create group with standard tools"
+        fi
+    else
+        print_status "nixos-agent group already exists"
+    fi
+    
     # Create nixos-agent user if it doesn't exist
     if ! id "nixos-agent" &>/dev/null; then
         print_status "Creating nixos-agent user..."
         # Try different user creation methods for NixOS compatibility
         if command -v adduser &> /dev/null; then
-            sudo adduser --system --shell /bin/bash --home /var/lib/nixos-agent --group nixos-agent
+            sudo adduser --system --shell /bin/bash --home /var/lib/nixos-agent --ingroup nixos-agent nixos-agent 2>/dev/null || true
         elif command -v useradd &> /dev/null; then
-            sudo useradd -r -s /bin/bash -d /var/lib/nixos-agent -m nixos-agent
+            sudo useradd -r -g nixos-agent -s /bin/bash -d /var/lib/nixos-agent nixos-agent 2>/dev/null || true
         else
             print_warning "Cannot create user with standard tools, using alternative approach"
-            # Create user manually
-            sudo groupadd nixos-agent 2>/dev/null || true
-            sudo useradd -r -g nixos-agent -s /bin/bash -d /var/lib/nixos-agent nixos-agent 2>/dev/null || true
+            # Try to create user without group specification
+            sudo useradd -r -s /bin/bash -d /var/lib/nixos-agent nixos-agent 2>/dev/null || true
+            # If that fails, try creating with a different approach
+            if ! id "nixos-agent" &>/dev/null; then
+                print_warning "Standard user creation failed, trying minimal approach"
+                # Find an available UID for system user (typically 100-999 range)
+                for uid in {100..999}; do
+                    if ! id "$uid" &>/dev/null; then
+                        echo "nixos-agent:x:$uid:$uid:NixOS AI Agent:/var/lib/nixos-agent:/bin/bash" | sudo tee -a /etc/passwd > /dev/null
+                        echo "nixos-agent:x:$uid:" | sudo tee -a /etc/group > /dev/null
+                        sudo mkdir -p /var/lib/nixos-agent
+                        break
+                    fi
+                done
+            fi
         fi
-        print_success "nixos-agent user created"
+        # Verify user was created successfully
+        if id "nixos-agent" &>/dev/null; then
+            print_success "nixos-agent user created successfully"
+        else
+            print_warning "Failed to create nixos-agent user, will use root for service"
+        fi
     else
         print_status "nixos-agent user already exists"
     fi
@@ -183,14 +214,20 @@ create_user_and_directories() {
 create_fallback_config() {
     print_status "Creating fallback configuration..."
     
-    # Determine the user to use for the service
+    # Determine the user and group to use for the service
     SERVICE_USER="root"
     SERVICE_GROUP="root"
     
     if id "nixos-agent" &>/dev/null; then
         SERVICE_USER="nixos-agent"
-        SERVICE_GROUP="nixos-agent"
-        print_status "Using nixos-agent user for service"
+        # Check if the group exists, otherwise use the user's primary group
+        if getent group "nixos-agent" &>/dev/null; then
+            SERVICE_GROUP="nixos-agent"
+        else
+            # Get the user's primary group
+            SERVICE_GROUP=$(id -gn nixos-agent 2>/dev/null || echo "nixos-agent")
+        fi
+        print_status "Using nixos-agent user for service (group: $SERVICE_GROUP)"
     else
         print_warning "nixos-agent user not found, using root for service"
     fi
