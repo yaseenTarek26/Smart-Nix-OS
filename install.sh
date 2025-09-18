@@ -141,7 +141,17 @@ create_user_and_directories() {
     # Create nixos-agent user if it doesn't exist
     if ! id "nixos-agent" &>/dev/null; then
         print_status "Creating nixos-agent user..."
-        sudo useradd -r -s /bin/bash -d /var/lib/nixos-agent -m nixos-agent
+        # Try different user creation methods for NixOS compatibility
+        if command -v adduser &> /dev/null; then
+            sudo adduser --system --shell /bin/bash --home /var/lib/nixos-agent --group nixos-agent
+        elif command -v useradd &> /dev/null; then
+            sudo useradd -r -s /bin/bash -d /var/lib/nixos-agent -m nixos-agent
+        else
+            print_warning "Cannot create user with standard tools, using alternative approach"
+            # Create user manually
+            sudo groupadd nixos-agent 2>/dev/null || true
+            sudo useradd -r -g nixos-agent -s /bin/bash -d /var/lib/nixos-agent nixos-agent 2>/dev/null || true
+        fi
         print_success "nixos-agent user created"
     else
         print_status "nixos-agent user already exists"
@@ -153,18 +163,37 @@ create_user_and_directories() {
     sudo mkdir -p /etc/nixos-agent
     sudo mkdir -p /opt/nixos-agent
     
-    # Set permissions
-    sudo chown -R nixos-agent:nixos-agent /var/lib/nixos-agent
-    sudo chown -R nixos-agent:nixos-agent /var/log/nixos-agent
+    # Set permissions - only if user exists
+    if id "nixos-agent" &>/dev/null; then
+        sudo chown -R nixos-agent:nixos-agent /var/lib/nixos-agent
+        sudo chown -R nixos-agent:nixos-agent /var/log/nixos-agent
+        print_success "User and directories created with proper ownership"
+    else
+        print_warning "nixos-agent user not found, using root ownership"
+        sudo chown -R root:root /var/lib/nixos-agent
+        sudo chown -R root:root /var/log/nixos-agent
+        print_success "User and directories created with root ownership"
+    fi
+    
     sudo chmod 755 /etc/nixos-agent
     sudo chmod 755 /opt/nixos-agent
-    
-    print_success "User and directories created"
 }
 
 # Function to create fallback configuration
 create_fallback_config() {
     print_status "Creating fallback configuration..."
+    
+    # Determine the user to use for the service
+    SERVICE_USER="root"
+    SERVICE_GROUP="root"
+    
+    if id "nixos-agent" &>/dev/null; then
+        SERVICE_USER="nixos-agent"
+        SERVICE_GROUP="nixos-agent"
+        print_status "Using nixos-agent user for service"
+    else
+        print_warning "nixos-agent user not found, using root for service"
+    fi
     
     # Create a simple systemd service for the AI agent
     sudo tee /etc/systemd/system/nixos-agent.service > /dev/null << EOF
@@ -174,8 +203,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=nixos-agent
-Group=nixos-agent
+User=$SERVICE_USER
+Group=$SERVICE_GROUP
 WorkingDirectory=/opt/nixos-agent
 ExecStart=/usr/bin/python3 /opt/nixos-agent/ai-agent/agent.py
 Restart=always
@@ -186,7 +215,67 @@ EnvironmentFile=/etc/nixos-agent/.env
 WantedBy=multi-user.target
 EOF
 
-    print_success "Fallback configuration created"
+    print_success "Fallback configuration created with user: $SERVICE_USER"
+}
+
+# Function to create NixOS configuration snippet
+create_nixos_config_snippet() {
+    print_status "Creating NixOS configuration snippet..."
+    
+    # Create a configuration snippet that can be added to configuration.nix
+    sudo tee /etc/nixos-agent/nixos-config-snippet.nix > /dev/null << 'EOF'
+# AI Agent configuration for NixOS
+# Add this to your /etc/nixos/configuration.nix
+
+# Create nixos-agent user
+users.users.nixos-agent = {
+  isSystemUser = true;
+  group = "nixos-agent";
+  home = "/var/lib/nixos-agent";
+  createHome = true;
+  shell = pkgs.bash;
+};
+
+users.groups.nixos-agent = {};
+
+# Enable AI agent service
+systemd.services.nixos-agent = {
+  description = "NixOS AI Agent";
+  wantedBy = [ "multi-user.target" ];
+  after = [ "network.target" ];
+  serviceConfig = {
+    Type = "simple";
+    User = "nixos-agent";
+    Group = "nixos-agent";
+    WorkingDirectory = "/opt/nixos-agent";
+    ExecStart = "${pkgs.python3}/bin/python /opt/nixos-agent/ai-agent/agent.py";
+    Restart = "always";
+    RestartSec = 5;
+    EnvironmentFile = "/etc/nixos-agent/.env";
+    StandardOutput = "journal";
+    StandardError = "journal";
+  };
+};
+
+# Install required packages
+environment.systemPackages = with pkgs; [
+  python3
+  python3Packages.fastapi
+  python3Packages.uvicorn
+  python3Packages.websockets
+  python3Packages.openai
+  python3Packages.google-generativeai
+  python3Packages.gitpython
+  python3Packages.pyyaml
+  python3Packages.requests
+  python3Packages.aiofiles
+  python3Packages.python-multipart
+  python3Packages.jinja2
+];
+EOF
+
+    print_success "NixOS configuration snippet created at /etc/nixos-agent/nixos-config-snippet.nix"
+    print_status "You can add this to your /etc/nixos/configuration.nix and rebuild"
 }
 
 # Function to install Python dependencies
@@ -371,6 +460,11 @@ show_final_instructions() {
     echo "  • View logs: journalctl -u nixos-agent -f"
     echo "  • Restart service: sudo systemctl restart nixos-agent"
     echo
+    echo "📝 NixOS Configuration:"
+    echo "  • Configuration snippet: /etc/nixos-agent/nixos-config-snippet.nix"
+    echo "  • Add to /etc/nixos/configuration.nix and rebuild for proper user management"
+    echo "  • Rebuild: sudo nixos-rebuild switch"
+    echo
     echo "Enjoy your AI-powered NixOS desktop! 🚀"
 }
 
@@ -385,6 +479,7 @@ main() {
     get_user_input
     create_user_and_directories
     create_fallback_config
+    create_nixos_config_snippet
     install_python_deps
     copy_ai_agent_files
     setup_git_repo
