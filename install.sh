@@ -318,6 +318,8 @@ systemd.services.nixos-agent = {
 # Install required packages
 environment.systemPackages = with pkgs; [
   python3
+  python3Packages.pip
+  python3Packages.virtualenv
   python3Packages.fastapi
   python3Packages.uvicorn
   python3Packages.websockets
@@ -354,15 +356,28 @@ if ! id "nixos-agent" &>/dev/null; then
     exit 1
 fi
 
+# Check if virtual environment exists
+if [[ -f "/opt/nixos-agent/venv/bin/python" ]]; then
+    echo "Using virtual environment for Python dependencies..."
+    PYTHON_CMD="/opt/nixos-agent/venv/bin/python"
+else
+    echo "Using system Python (may need manual dependency installation)..."
+    PYTHON_CMD="python3"
+fi
+
 # Check if Python dependencies are available
-if ! python3 -c "import fastapi" &>/dev/null; then
+if ! $PYTHON_CMD -c "import fastapi" &>/dev/null; then
     echo "Installing Python dependencies..."
-    pip3 install --user fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2
+    if [[ -f "/opt/nixos-agent/venv/bin/pip" ]]; then
+        /opt/nixos-agent/venv/bin/pip install fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2
+    else
+        pip3 install --user fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2
+    fi
 fi
 
 # Start the AI agent
 echo "Starting AI agent as nixos-agent user..."
-sudo -u nixos-agent python3 /opt/nixos-agent/ai-agent/agent.py --mode=chat
+sudo -u nixos-agent $PYTHON_CMD /opt/nixos-agent/ai-agent/agent.py --mode=chat
 
 EOF
 
@@ -370,18 +385,69 @@ EOF
     print_success "Manual startup script created at /opt/nixos-agent/start-ai-agent.sh"
 }
 
+# Function to create Python requirements file
+create_requirements_file() {
+    print_status "Creating Python requirements file..."
+    
+    # Create requirements.txt for the AI agent
+    sudo tee /opt/nixos-agent/requirements.txt > /dev/null << 'EOF'
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+websockets==12.0
+openai==1.3.7
+google-generativeai==0.3.2
+gitpython==3.1.40
+pyyaml==6.0.1
+requests==2.31.0
+aiofiles==23.2.1
+python-multipart==0.0.6
+jinja2==3.1.2
+EOF
+
+    print_success "Python requirements file created at /opt/nixos-agent/requirements.txt"
+}
+
 # Function to install Python dependencies
 install_python_deps() {
     print_status "Installing Python dependencies..."
     
-    # Check if pip is available
-    if command -v pip3 &> /dev/null; then
-        print_status "Installing Python packages..."
-        pip3 install --user fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2
-        print_success "Python dependencies installed"
+    # Check if we're in a NixOS environment with externally managed Python
+    if python3 -c "import sys; print('externally-managed' in str(sys.path))" 2>/dev/null | grep -q "True"; then
+        print_warning "Detected externally managed Python environment (NixOS)"
+        print_status "Python dependencies will be managed through NixOS configuration"
+        print_status "Creating virtual environment for Python packages..."
+        
+        # Create a virtual environment for Python packages
+        if command -v python3 &> /dev/null; then
+            # Create virtual environment in a writable location
+            sudo mkdir -p /opt/nixos-agent/venv
+            sudo python3 -m venv /opt/nixos-agent/venv
+            
+            # Install packages in virtual environment
+            sudo /opt/nixos-agent/venv/bin/pip install --upgrade pip
+            sudo /opt/nixos-agent/venv/bin/pip install fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2
+            
+            # Set proper ownership
+            if id "nixos-agent" &>/dev/null; then
+                sudo chown -R nixos-agent:nixos-agent /opt/nixos-agent/venv
+            else
+                sudo chown -R root:root /opt/nixos-agent/venv
+            fi
+            
+            print_success "Python dependencies installed in virtual environment"
+        else
+            print_warning "python3 not found, Python dependencies will need to be installed manually"
+        fi
     else
-        print_warning "pip3 not available, skipping Python dependency installation"
-        print_status "You may need to install dependencies manually"
+        # Try standard pip install
+        if command -v pip3 &> /dev/null; then
+            print_status "Installing Python packages with pip3..."
+            pip3 install --user fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2
+            print_success "Python dependencies installed"
+        else
+            print_warning "pip3 not available, skipping Python dependency installation"
+            print_status "You may need to install dependencies manually"
+        fi
     fi
 }
 
@@ -580,6 +646,7 @@ main() {
     create_fallback_config
     create_nixos_config_snippet
     create_startup_script
+    create_requirements_file
     install_python_deps
     copy_ai_agent_files
     setup_git_repo
