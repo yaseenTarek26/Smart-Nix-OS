@@ -484,6 +484,44 @@ EOF
     print_success "Python dependency installer created at /opt/nixos-agent/install_deps.py"
 }
 
+# Function to setup repository if needed
+setup_repository() {
+    print_status "Setting up repository..."
+    
+    # Check if we're in a git repository with the right files
+    if [[ -f "flake.nix" ]] || [[ -f "profiles/desktop.nix" ]] || [[ -f "modules/ai-agent.nix" ]]; then
+        print_status "Repository files found in current directory"
+        return 0
+    fi
+    
+    # Check if we're in a git repository
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        print_status "Git repository found, but missing required files"
+        print_status "This might be a different repository"
+    fi
+    
+    # Try to clone the repository
+    print_status "Attempting to clone the Smart-Nix-OS repository..."
+    if git clone https://github.com/yaseenTarek26/Smart-Nix-OS.git /tmp/smart-nix-os; then
+        print_success "Repository cloned successfully"
+        print_status "Copying repository files to current directory..."
+        
+        # Copy essential files
+        cp -r /tmp/smart-nix-os/profiles . 2>/dev/null || true
+        cp -r /tmp/smart-nix-os/modules . 2>/dev/null || true
+        cp -r /tmp/smart-nix-os/ai-agent . 2>/dev/null || true
+        cp /tmp/smart-nix-os/flake.nix . 2>/dev/null || true
+        
+        # Clean up
+        rm -rf /tmp/smart-nix-os
+        
+        print_success "Repository files copied to current directory"
+    else
+        print_warning "Failed to clone repository, continuing with manual setup"
+        print_status "The AI agent will be installed without the full repository structure"
+    fi
+}
+
 # Function to install Python dependencies
 install_python_deps() {
     print_status "Installing Python dependencies..."
@@ -577,27 +615,38 @@ EOF
 build_system() {
     print_status "Building NixOS system with AI agent..."
     
-    # Check if we're in the right directory
+    # Check if we're in the right directory or if flake.nix exists
     if [[ ! -f "flake.nix" ]]; then
-        print_error "flake.nix not found. Please run this script from the repository root."
-        exit 1
-    fi
-    
-    # Try to build the system
-    print_status "Building flake configuration..."
-    if sudo nixos-rebuild switch --flake .#$HOST; then
-        print_success "System built successfully"
-    else
-        print_warning "System build failed, trying alternative approach..."
+        print_warning "flake.nix not found in current directory"
+        print_status "This script can work without a flake configuration"
+        print_status "The AI agent will be installed and configured manually"
         
-        # Alternative: try to build without flake
-        print_status "Trying to build without flake..."
+        # Try to build without flake
+        print_status "Trying to build without flake configuration..."
         if sudo nixos-rebuild switch; then
             print_success "System built successfully (without flake)"
         else
-            print_error "System build failed completely"
-            print_warning "You may need to manually configure the system"
-            print_status "Continuing with installation..."
+            print_warning "System build failed, but continuing with AI agent installation"
+            print_status "You can manually add the configuration snippet to your /etc/nixos/configuration.nix"
+            print_status "and run 'sudo nixos-rebuild switch' later"
+        fi
+    else
+        # Try to build the system with flake
+        print_status "Building flake configuration..."
+        if sudo nixos-rebuild switch --flake .#$HOST; then
+            print_success "System built successfully"
+        else
+            print_warning "Flake build failed, trying alternative approach..."
+            
+            # Alternative: try to build without flake
+            print_status "Trying to build without flake..."
+            if sudo nixos-rebuild switch; then
+                print_success "System built successfully (without flake)"
+            else
+                print_warning "System build failed, but continuing with AI agent installation"
+                print_status "You can manually add the configuration snippet to your /etc/nixos/configuration.nix"
+                print_status "and run 'sudo nixos-rebuild switch' later"
+            fi
         fi
     fi
 }
@@ -692,6 +741,10 @@ show_final_instructions() {
     echo "  • Web UI: http://127.0.0.1:8999"
     echo "  • Chat interface: ai-chat"
     echo
+    echo "📁 Repository Setup:"
+    echo "  • If you want the full repository: git clone https://github.com/yaseenTarek26/Smart-Nix-OS.git"
+    echo "  • Then run this script from the repository directory for full flake support"
+    echo
     echo "Enjoy your AI-powered NixOS desktop! 🚀"
 }
 
@@ -704,6 +757,7 @@ main() {
     check_root
     check_requirements
     get_user_input
+    setup_repository
     create_user_and_directories
     create_fallback_config
     create_nixos_config_snippet
