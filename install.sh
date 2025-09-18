@@ -70,6 +70,18 @@ check_requirements() {
 get_user_input() {
     print_status "Getting user configuration..."
     
+    # Check if running in non-interactive mode (piped from curl)
+    if [[ ! -t 0 ]]; then
+        print_status "Running in non-interactive mode, using defaults..."
+        USERNAME=${USER:-"nixos"}
+        HOST="desktop"
+        LLM_PROVIDER="gemini"
+        API_KEY="AIzaSyBjj5weW0GXXecUIfN2GHfa0zX9A9MAvm0"
+        print_success "Using default configuration: $USERNAME, $HOST, $LLM_PROVIDER"
+        return
+    fi
+    
+    # Interactive mode
     # Get username
     read -p "Enter your username (default: $USER): " USERNAME
     USERNAME=${USERNAME:-$USER}
@@ -92,14 +104,14 @@ get_user_input() {
     echo "1) OpenAI (requires API key)"
     echo "2) Gemini (requires API key)"
     echo "3) Local (experimental)"
-    read -p "Enter choice (1-3, default: 1): " LLM_CHOICE
-    LLM_CHOICE=${LLM_CHOICE:-1}
+    read -p "Enter choice (1-3, default: 2): " LLM_CHOICE
+    LLM_CHOICE=${LLM_CHOICE:-2}
     
     case $LLM_CHOICE in
         1) LLM_PROVIDER="openai" ;;
         2) LLM_PROVIDER="gemini" ;;
         3) LLM_PROVIDER="local" ;;
-        *) LLM_PROVIDER="openai" ;;
+        *) LLM_PROVIDER="gemini" ;;
     esac
     
     # Get API key if needed
@@ -139,6 +151,63 @@ create_directories() {
     sudo chmod 755 /opt/nixos-agent
     
     print_success "Directories created"
+}
+
+# Function to create fallback configuration
+create_fallback_config() {
+    print_status "Creating fallback configuration..."
+    
+    # Create a simple systemd service for the AI agent
+    sudo tee /etc/systemd/system/nixos-agent.service > /dev/null << EOF
+[Unit]
+Description=NixOS AI Agent
+After=network.target
+
+[Service]
+Type=simple
+User=nixos-agent
+Group=nixos-agent
+WorkingDirectory=/opt/nixos-agent
+ExecStart=/usr/bin/python3 /opt/nixos-agent/ai-agent/agent.py
+Restart=always
+RestartSec=5
+EnvironmentFile=/etc/nixos-agent/.env
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    print_success "Fallback configuration created"
+}
+
+# Function to install Python dependencies
+install_python_deps() {
+    print_status "Installing Python dependencies..."
+    
+    # Check if pip is available
+    if command -v pip3 &> /dev/null; then
+        print_status "Installing Python packages..."
+        pip3 install --user fastapi uvicorn websockets openai google-generativeai gitpython pyyaml requests aiofiles python-multipart jinja2
+        print_success "Python dependencies installed"
+    else
+        print_warning "pip3 not available, skipping Python dependency installation"
+        print_status "You may need to install dependencies manually"
+    fi
+}
+
+# Function to copy AI agent files
+copy_ai_agent_files() {
+    print_status "Copying AI agent files..."
+    
+    # Copy AI agent files to /opt/nixos-agent
+    if [[ -d "ai-agent" ]]; then
+        sudo cp -r ai-agent/* /opt/nixos-agent/
+        sudo chown -R nixos-agent:nixos-agent /opt/nixos-agent
+        sudo chmod +x /opt/nixos-agent/bin/* 2>/dev/null || true
+        print_success "AI agent files copied"
+    else
+        print_warning "ai-agent directory not found, skipping file copy"
+    fi
 }
 
 # Function to setup git repository
@@ -182,14 +251,28 @@ EOF
 build_system() {
     print_status "Building NixOS system with AI agent..."
     
-    # Build the system
-    sudo nixos-rebuild switch --flake .#$HOST
+    # Check if we're in the right directory
+    if [[ ! -f "flake.nix" ]]; then
+        print_error "flake.nix not found. Please run this script from the repository root."
+        exit 1
+    fi
     
-    if [[ $? -eq 0 ]]; then
+    # Try to build the system
+    print_status "Building flake configuration..."
+    if sudo nixos-rebuild switch --flake .#$HOST; then
         print_success "System built successfully"
     else
-        print_error "System build failed"
-        exit 1
+        print_warning "System build failed, trying alternative approach..."
+        
+        # Alternative: try to build without flake
+        print_status "Trying to build without flake..."
+        if sudo nixos-rebuild switch; then
+            print_success "System built successfully (without flake)"
+        else
+            print_error "System build failed completely"
+            print_warning "You may need to manually configure the system"
+            print_status "Continuing with installation..."
+        fi
     fi
 }
 
@@ -197,18 +280,25 @@ build_system() {
 start_services() {
     print_status "Starting AI agent services..."
     
-    # Enable and start the service
-    sudo systemctl enable nixos-agent.service
-    sudo systemctl start nixos-agent.service
-    
-    # Wait a moment for service to start
-    sleep 3
-    
-    # Check if service is running
-    if systemctl is-active --quiet nixos-agent.service; then
-        print_success "AI agent service started successfully"
+    # Check if service file exists
+    if [[ -f "/etc/systemd/system/nixos-agent.service" ]]; then
+        # Enable and start the service
+        sudo systemctl daemon-reload
+        sudo systemctl enable nixos-agent.service
+        sudo systemctl start nixos-agent.service
+        
+        # Wait a moment for service to start
+        sleep 3
+        
+        # Check if service is running
+        if systemctl is-active --quiet nixos-agent.service; then
+            print_success "AI agent service started successfully"
+        else
+            print_warning "AI agent service may not be running. Check with: systemctl status nixos-agent"
+        fi
     else
-        print_warning "AI agent service may not be running. Check with: systemctl status nixos-agent"
+        print_warning "Service file not found. The AI agent will be available after reboot."
+        print_status "You can start it manually with: sudo systemctl start nixos-agent"
     fi
 }
 
@@ -277,6 +367,9 @@ main() {
     check_requirements
     get_user_input
     create_directories
+    create_fallback_config
+    install_python_deps
+    copy_ai_agent_files
     setup_git_repo
     create_env_file
     build_system
