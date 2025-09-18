@@ -1,0 +1,8 @@
+#!/bin/bash
+# AI Chat launcher script
+
+# Open web UI in browser
+xdg-open "http://127.0.0.1:8999" 2>/dev/null || \
+firefox "http://127.0.0.1:8999" 2>/dev/null || \
+chromium "http://127.0.0.1:8999" 2>/dev/null || \
+echo "Please open http://127.0.0.1:8999 in your browser"
