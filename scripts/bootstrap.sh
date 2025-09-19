@@ -37,7 +37,13 @@ success() {
 
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
-   error "This script must be run as root (use sudo)"
+   error "This script must be run as root. Please run with sudo:
+   
+   sudo sh <(curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh)
+   
+   Or download and run manually:
+   curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh -o bootstrap.sh
+   sudo sh bootstrap.sh"
 fi
 
 # Check if we're on NixOS
