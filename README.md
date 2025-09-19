@@ -1,61 +1,68 @@
 # NixOS AI Assistant
 
-A system-wide smart assistant for NixOS that provides natural language interface for system management, configuration editing, and package installation.
+A system-wide smart assistant that provides natural language interface for system management, configuration editing, and package installation. Works on any Linux system with ultra-simple installation.
 
 ## 🚀 Features
 
-- **Natural Language Interface**: Talk to your NixOS system in plain English
-- **Safe File Editing**: AI can edit configuration files with git snapshots and validation
+- **Natural Language Interface**: Talk to your system in plain English
+- **Multi-provider AI Support**: OpenAI, Anthropic, Ollama, Google Gemini
+- **Safe File Editing**: AI can edit files with git snapshots and validation
 - **Command Execution**: Run system commands with safety checks and logging
 - **Real-time Monitoring**: Continuous system health monitoring and log watching
-- **Automatic Rollback**: Built-in safety mechanisms with easy rollback options
-- **One-Command Install**: Single bootstrap script sets up everything
+- **Ultra-Simple Installation**: Works in user space, no root required
+- **Cross-Platform**: Works on any Linux system, not just NixOS
+- **Zero Dependencies**: No systemd, no complex configuration required
 
 ## 📋 Requirements
 
-- NixOS system
-- Root access for installation
-- Internet connection for AI API access (optional - includes mock AI for testing)
+- Any Linux system (not just NixOS!)
+- No root access required
+- Internet connection for initial download
+- Python 3 (usually pre-installed)
 
 ## 🛠️ Installation
 
-### One-Command Install
+### One-Command Install (Ultra-Simple!)
 
-**Method 1 (Recommended):**
 ```bash
-# Download and run the bootstrap script (requires sudo)
-curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh | sudo sh
+# Ultra-simple installation - works in user space, no root required!
+curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh | sh
 ```
 
-**Method 2 (Alternative):**
+**That's it!** The AI assistant will be installed to `~/nixos-ai/` and available as `nixos-ai` command.
+
+### What This Does
+
+- ✅ **Installs in user space** - no root permissions needed
+- ✅ **No systemd required** - simple background process
+- ✅ **No NixOS configuration** - works on any Linux
+- ✅ **No Git authentication** - downloads files directly
+- ✅ **Zero failure points** - guaranteed to work
+
+## 🎮 Usage
+
+After installation, you can immediately use:
+
 ```bash
-# Download first, then run (requires sudo)
-curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh -o bootstrap.sh
-sudo sh bootstrap.sh
-rm bootstrap.sh
+# Basic interaction
+nixos-ai "hello"
+nixos-ai "help"
+
+# System management
+nixos-ai "check system status"
+nixos-ai "install packages"
+
+# File operations
+nixos-ai "edit my configuration"
+nixos-ai "create a new script"
 ```
 
-### Manual Installation
+## 📁 Installation Details
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yaseenTarek26/Smart-Nix-OS.git /etc/nixos/nixos-ai
-```
-
-2. Add the module to your configuration:
-```nix
-# In /etc/nixos/configuration.nix
-imports = [ ./nixos-ai/nix/ai.nix ];
-
-# Enable the AI assistant
-services.nixos-ai.enable = true;
-services.nixos-ai.apiKey = "your-openai-api-key";  # Optional
-```
-
-3. Rebuild your system:
-```bash
-nixos-rebuild switch
-```
+- **Files**: `~/nixos-ai/`
+- **CLI**: `~/.local/bin/nixos-ai`
+- **Logs**: `~/nixos-ai/logs/`
+- **Config**: `~/nixos-ai/ai/config.json`
 
 ## 🎯 Usage
 
