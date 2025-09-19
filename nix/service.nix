@@ -79,9 +79,10 @@ in
       curl
       jq
       inotify-tools
-      # AI-specific packages
+      # AI-specific packages - install via Nix instead of pip
       python3Packages.openai
       python3Packages.anthropic
+      python3Packages.google-generativeai
       python3Packages.httpx
       python3Packages.aiohttp
       python3Packages.psutil
@@ -89,6 +90,8 @@ in
       python3Packages.structlog
       python3Packages.pydantic
       python3Packages.typer
+      python3Packages.aiofiles
+      python3Packages.python-dotenv
     ];
 
     # Systemd service for the AI assistant
