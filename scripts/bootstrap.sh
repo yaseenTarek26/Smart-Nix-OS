@@ -244,28 +244,45 @@ fi
 
 # Apply the configuration
 log "Applying NixOS configuration..."
-if nixos-rebuild switch 2>/dev/null; then
+log "This may take a few minutes and might open an editor..."
+
+# Try to apply configuration with better error handling
+if nixos-rebuild switch 2>&1 | tee /tmp/nixos-rebuild.log; then
     success "NixOS configuration applied successfully"
 else
-    warn "Failed to apply NixOS configuration, but continuing..."
-    warn "You may need to run 'nixos-rebuild switch' manually later"
+    error "Failed to apply NixOS configuration. This is required for the AI service to work."
+    error "Please run the following commands manually:"
+    error "1. nixos-rebuild switch"
+    error "2. systemctl enable nixos-ai.service"
+    error "3. systemctl start nixos-ai.service"
+    error "Check the log: cat /tmp/nixos-rebuild.log"
+    exit 1
 fi
 
 # Enable and start the AI service
 log "Starting AI assistant service..."
+
+# Check if the service exists
+if ! systemctl list-unit-files | grep -q nixos-ai.service; then
+    error "nixos-ai.service not found. The NixOS configuration may not have been applied correctly."
+    error "Please run: nixos-rebuild switch"
+    exit 1
+fi
+
 if systemctl enable nixos-ai.service 2>/dev/null; then
     success "AI service enabled"
 else
-    warn "Failed to enable AI service, continuing..."
+    error "Failed to enable AI service"
+    exit 1
 fi
 
 if systemctl start nixos-ai.service 2>/dev/null; then
     success "AI service started"
 else
-    warn "Failed to start AI service. This may be due to missing dependencies."
-    warn "You can try starting it manually later with:"
-    warn "  systemctl start nixos-ai.service"
-    warn "  systemctl status nixos-ai.service"
+    error "Failed to start AI service. Check the logs:"
+    error "  journalctl -u nixos-ai.service"
+    error "  systemctl status nixos-ai.service"
+    exit 1
 fi
 
 # Create command-line interface
@@ -324,7 +341,15 @@ fi
 if systemctl is-enabled nixos-ai.service >/dev/null 2>&1; then
     success "AI service is enabled"
 else
-    warn "AI service is not enabled - you may need to enable it manually"
+    error "AI service is not enabled - installation failed"
+    exit 1
+fi
+
+if systemctl is-active nixos-ai.service >/dev/null 2>&1; then
+    success "AI service is running"
+else
+    error "AI service is not running - installation failed"
+    exit 1
 fi
 
 success "NixOS AI Assistant installation completed!"
