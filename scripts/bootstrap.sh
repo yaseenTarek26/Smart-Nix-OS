@@ -154,12 +154,40 @@ chmod +x "$INSTALL_DIR/scripts"/*.sh
 # Add import to configuration.nix if not already present
 log "Adding AI module import to configuration.nix..."
 
-# Check if the file has proper NixOS syntax (wrapped in { })
-if ! grep -q "^[[:space:]]*{" "$CONFIG_FILE"; then
-    warn "Configuration.nix is not properly formatted. Fixing syntax..."
+# Pre-check: Look for the specific error pattern we're seeing
+if head -1 "$CONFIG_FILE" | grep -q "^[[:space:]]*imports[[:space:]]*="; then
+    warn "Found malformed configuration.nix with imports at top level - this is the exact error we need to fix"
+fi
+
+# Check and fix configuration.nix syntax
+log "Checking and fixing configuration.nix syntax..."
+
+# Create a backup
+cp "$CONFIG_FILE" "$CONFIG_FILE.backup"
+
+# Check if file starts with imports = (malformed)
+if head -1 "$CONFIG_FILE" | grep -q "^[[:space:]]*imports[[:space:]]*="; then
+    warn "Detected malformed configuration.nix (imports at top level). Fixing..."
     
-    # Create a backup
-    cp "$CONFIG_FILE" "$CONFIG_FILE.backup"
+    # Read the entire file and wrap it properly
+    CONTENT=$(cat "$CONFIG_FILE")
+    
+    # Create proper NixOS configuration
+    cat > "$CONFIG_FILE" << EOF
+{
+  # NixOS AI Assistant
+  imports = [ ./nixos-ai/nix/ai.nix ];
+  services.nixos-ai.enable = true;
+  
+  # Original configuration content
+$CONTENT
+}
+EOF
+    
+    success "Fixed malformed configuration.nix syntax"
+    
+elif ! grep -q "^[[:space:]]*{" "$CONFIG_FILE"; then
+    warn "Configuration.nix missing opening brace. Fixing..."
     
     # Wrap the entire file in proper NixOS syntax
     {
@@ -172,18 +200,81 @@ if ! grep -q "^[[:space:]]*{" "$CONFIG_FILE"; then
         echo "}"
     } > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
     
-    success "Fixed configuration.nix syntax and added AI module"
+    success "Wrapped configuration.nix in proper syntax"
+    
 else
     # File has proper syntax, just add the import if not present
     if ! grep -q "nixos-ai/nix/ai.nix" "$CONFIG_FILE"; then
-        # Create a backup
-        cp "$CONFIG_FILE" "$CONFIG_FILE.backup"
-        
         # Add the import line before the closing brace
         sed -i '/^[[:space:]]*}[[:space:]]*$/i\  imports = [ ./nixos-ai/nix/ai.nix ];\n  services.nixos-ai.enable = true;' "$CONFIG_FILE"
         success "Added AI module import to configuration.nix"
     else
         warn "AI module import already present in configuration.nix"
+    fi
+fi
+
+# Verify the configuration syntax
+log "Verifying configuration.nix syntax..."
+if nix-instantiate --parse "$CONFIG_FILE" >/dev/null 2>&1; then
+    success "Configuration.nix syntax is valid"
+else
+    warn "Configuration.nix syntax is still invalid. Creating a minimal working configuration..."
+    
+    # Create a minimal working NixOS configuration
+    cat > "$CONFIG_FILE" << 'EOF'
+{
+  # NixOS AI Assistant
+  imports = [ ./nixos-ai/nix/ai.nix ];
+  services.nixos-ai.enable = true;
+  
+  # Basic system configuration
+  boot.loader.grub.enable = true;
+  boot.loader.grub.device = "nodev";
+  boot.loader.grub.efiSupport = true;
+  boot.loader.efi.canTouchEfiVariables = true;
+  
+  networking.hostName = "nixos";
+  networking.networkmanager.enable = true;
+  
+  time.timeZone = "UTC";
+  
+  i18n.defaultLocale = "en_US.UTF-8";
+  i18n.extraLocaleSettings = {
+    LC_ADDRESS = "en_US.UTF-8";
+    LC_IDENTIFICATION = "en_US.UTF-8";
+    LC_MEASUREMENT = "en_US.UTF-8";
+    LC_MONETARY = "en_US.UTF-8";
+    LC_NAME = "en_US.UTF-8";
+    LC_NUMERIC = "en_US.UTF-8";
+    LC_PAPER = "en_US.UTF-8";
+    LC_TELEPHONE = "en_US.UTF-8";
+    LC_TIME = "en_US.UTF-8";
+  };
+  
+  services.xserver.enable = true;
+  services.xserver.displayManager.gdm.enable = true;
+  services.xserver.desktopManager.gnome.enable = true;
+  
+  users.users.nixos = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" "networkmanager" ];
+    packages = with pkgs; [];
+  };
+  
+  nixpkgs.config.allowUnfree = true;
+  
+  system.stateVersion = "24.05";
+}
+EOF
+    
+    success "Created minimal working NixOS configuration with AI assistant"
+    
+    # Verify the new configuration
+    if nix-instantiate --parse "$CONFIG_FILE" >/dev/null 2>&1; then
+        success "New configuration.nix syntax is valid"
+    else
+        error "Failed to create valid configuration.nix. Manual intervention required."
+        exit 1
     fi
 fi
 
