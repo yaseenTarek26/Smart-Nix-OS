@@ -1,0 +1,109 @@
+{
+  "file_permissions": {
+    "read": [
+      "/etc/nixos/nixos-ai/**/*",
+      "/etc/nixos/configuration.nix",
+      "/etc/nixos/hardware-configuration.nix"
+    ],
+    "write": [
+      "/etc/nixos/nixos-ai/**/*"
+    ],
+    "execute": [
+      "/etc/nixos/nixos-ai/scripts/*.sh",
+      "/usr/bin/nixos-rebuild",
+      "/usr/bin/systemctl",
+      "/usr/bin/git",
+      "/usr/bin/curl",
+      "/usr/bin/jq"
+    ],
+    "forbidden": [
+      "/etc/passwd",
+      "/etc/shadow",
+      "/etc/sudoers",
+      "/root/**/*",
+      "/home/**/*",
+      "/var/log/**/*"
+    ]
+  },
+  "command_permissions": {
+    "allowed": [
+      "nixos-rebuild",
+      "systemctl",
+      "git",
+      "curl",
+      "jq",
+      "nix",
+      "nix-env",
+      "nix-shell",
+      "ls",
+      "cat",
+      "grep",
+      "find",
+      "ps",
+      "top",
+      "df",
+      "free",
+      "uptime",
+      "journalctl"
+    ],
+    "restricted": [
+      "rm -rf",
+      "dd if=",
+      "mkfs",
+      "fdisk",
+      "parted",
+      "wipefs",
+      "shutdown",
+      "reboot",
+      "halt",
+      "poweroff",
+      "init",
+      "killall",
+      "pkill"
+    ],
+    "forbidden": [
+      "rm -rf /",
+      "dd if=/dev/zero",
+      "mkfs /dev/",
+      "fdisk /dev/",
+      "shutdown -h now",
+      "reboot",
+      "halt",
+      "poweroff"
+    ]
+  },
+  "network_permissions": {
+    "allowed_domains": [
+      "api.openai.com",
+      "api.anthropic.com",
+      "localhost",
+      "127.0.0.1"
+    ],
+    "allowed_ports": [
+      80,
+      443,
+      11434
+    ],
+    "blocked_domains": [
+      "malicious-site.com",
+      "phishing-site.com"
+    ]
+  },
+  "system_permissions": {
+    "can_modify_system_files": false,
+    "can_install_packages": true,
+    "can_enable_services": true,
+    "can_modify_network": false,
+    "can_access_user_data": false,
+    "can_modify_sudoers": false,
+    "can_access_ssh_keys": false
+  },
+  "ai_behavior": {
+    "require_confirmation_for_dangerous_commands": true,
+    "max_file_size_mb": 10,
+    "max_concurrent_operations": 3,
+    "auto_rollback_on_failure": true,
+    "log_all_actions": true,
+    "require_git_commit": true
+  }
+}

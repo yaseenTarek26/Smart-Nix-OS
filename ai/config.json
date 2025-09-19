@@ -1,0 +1,89 @@
+{
+  "ai_models": {
+    "openai": {
+      "api_key": "",
+      "base_url": "https://api.openai.com/v1",
+      "models": {
+        "gpt-4": {
+          "temperature": 0.7,
+          "max_tokens": 2000,
+          "timeout": 300
+        },
+        "gpt-3.5-turbo": {
+          "temperature": 0.7,
+          "max_tokens": 1000,
+          "timeout": 180
+        }
+      },
+      "default_model": "gpt-4"
+    },
+    "ollama": {
+      "api_key": "",
+      "base_url": "http://localhost:11434",
+      "models": {
+        "llama2": {
+          "temperature": 0.7,
+          "max_tokens": 2000,
+          "timeout": 300
+        },
+        "codellama": {
+          "temperature": 0.5,
+          "max_tokens": 2000,
+          "timeout": 300
+        }
+      },
+      "default_model": "llama2"
+    },
+    "anthropic": {
+      "api_key": "",
+      "base_url": "https://api.anthropic.com",
+      "models": {
+        "claude-3-opus": {
+          "temperature": 0.7,
+          "max_tokens": 2000,
+          "timeout": 300
+        },
+        "claude-3-sonnet": {
+          "temperature": 0.7,
+          "max_tokens": 1500,
+          "timeout": 240
+        }
+      },
+      "default_model": "claude-3-opus"
+    }
+  },
+  "active_provider": "openai",
+  "fallback_providers": ["ollama", "anthropic"],
+  "allowed_paths": [
+    "/etc/nixos/nixos-ai"
+  ],
+  "enable_system_wide_access": false,
+  "auto_commit": true,
+  "auto_rollback": true,
+  "validation_required": true,
+  "log_level": "INFO",
+  "max_file_size": 10485760,
+  "backup_retention_days": 30,
+  "safety_settings": {
+    "require_confirmation": false,
+    "max_concurrent_commands": 3,
+    "command_timeout": 600,
+    "backup_before_changes": true,
+    "dangerous_commands": [
+      "rm -rf /",
+      "dd if=/dev/zero",
+      "mkfs",
+      "fdisk",
+      "shutdown",
+      "reboot"
+    ]
+  },
+  "monitoring": {
+    "watch_system_logs": true,
+    "watch_service_status": true,
+    "watch_file_changes": true,
+    "health_check_interval": 30
+  },
+  "state_directory": "/etc/nixos/nixos-ai/state",
+  "cache_directory": "/etc/nixos/nixos-ai/cache"
+}

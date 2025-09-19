@@ -1,0 +1,43 @@
+# NixOS AI Assistant Dependencies
+# Core AI libraries
+openai>=1.0.0
+anthropic>=0.7.0
+httpx>=0.24.0
+aiohttp>=3.8.0
+
+# Async and concurrency
+asyncio-mqtt>=0.13.0
+aiofiles>=23.0.0
+
+# Configuration and environment
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+typer>=0.9.0
+
+# System monitoring and logging
+psutil>=5.9.0
+watchdog>=3.0.0
+structlog>=23.0.0
+
+# File and data handling
+pathlib2>=2.3.7
+pyyaml>=6.0
+toml>=0.10.2
+jsonschema>=4.17.0
+
+# Security and validation
+cryptography>=41.0.0
+keyring>=24.0.0
+
+# Testing and development
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.5.0
+
+# Optional: Local AI models
+# ollama>=0.1.0  # Uncomment if using Ollama
+# transformers>=4.30.0  # Uncomment if using Hugging Face models
+# torch>=2.0.0  # Uncomment if using PyTorch models
