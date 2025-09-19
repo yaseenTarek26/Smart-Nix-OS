@@ -123,7 +123,7 @@ nixos-ai/
 ### Installation
 ```bash
 # One-command installation
-sh <(curl -s https://raw.githubusercontent.com/YOURNAME/nixos-ai/main/scripts/bootstrap.sh)
+sh <(curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh)
 ```
 
 ### Basic Usage

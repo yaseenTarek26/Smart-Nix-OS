@@ -23,14 +23,14 @@ A system-wide smart assistant for NixOS that provides natural language interface
 
 ```bash
 # Download and run the bootstrap script
-sh <(curl -s https://raw.githubusercontent.com/YOURNAME/nixos-ai/main/scripts/bootstrap.sh)
+sh <(curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh)
 ```
 
 ### Manual Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/YOURNAME/nixos-ai.git /etc/nixos/nixos-ai
+git clone https://github.com/yaseenTarek26/Smart-Nix-OS.git /etc/nixos/nixos-ai
 ```
 
 2. Add the module to your configuration:

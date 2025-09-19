@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO_URL="https://github.com/YOURNAME/nixos-ai.git"
+REPO_URL="https://github.com/yaseenTarek26/Smart-Nix-OS.git"
 INSTALL_DIR="/etc/nixos/nixos-ai"
 CONFIG_FILE="/etc/nixos/configuration.nix"
 BACKUP_DIR="/etc/nixos/backup-$(date +%Y%m%d-%H%M%S)"
