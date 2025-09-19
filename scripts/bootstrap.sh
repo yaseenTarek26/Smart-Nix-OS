@@ -162,6 +162,13 @@ fi
 # Check and fix configuration.nix syntax
 log "Checking and fixing configuration.nix syntax..."
 
+# Verify the AI module exists
+if [[ ! -f "$INSTALL_DIR/nix/ai.nix" ]]; then
+    error "AI module file not found: $INSTALL_DIR/nix/ai.nix"
+    error "Installation directory may not be correct. Please check the installation."
+    exit 1
+fi
+
 # Create a backup
 cp "$CONFIG_FILE" "$CONFIG_FILE.backup"
 
@@ -215,9 +222,18 @@ fi
 
 # Verify the configuration syntax
 log "Verifying configuration.nix syntax..."
+log "Current configuration.nix content:"
+head -5 "$CONFIG_FILE" | while read line; do
+    log "  $line"
+done
+
 if nix-instantiate --parse "$CONFIG_FILE" >/dev/null 2>&1; then
     success "Configuration.nix syntax is valid"
 else
+    log "Configuration syntax check failed. Error details:"
+    nix-instantiate --parse "$CONFIG_FILE" 2>&1 | head -10 | while read line; do
+        log "  $line"
+    done
     warn "Configuration.nix syntax is still invalid. Creating a minimal working configuration..."
     
     # Create a minimal working NixOS configuration
@@ -270,11 +286,64 @@ EOF
     success "Created minimal working NixOS configuration with AI assistant"
     
     # Verify the new configuration
+    log "Verifying the minimal configuration..."
     if nix-instantiate --parse "$CONFIG_FILE" >/dev/null 2>&1; then
         success "New configuration.nix syntax is valid"
     else
-        error "Failed to create valid configuration.nix. Manual intervention required."
-        exit 1
+        warn "Minimal configuration still invalid. Trying alternative approach..."
+        
+        # Try a different approach - create a very basic configuration
+        cat > "$CONFIG_FILE" << 'EOF'
+{ config, pkgs, ... }:
+
+{
+  # NixOS AI Assistant
+  imports = [ ./nixos-ai/nix/ai.nix ];
+  services.nixos-ai.enable = true;
+  
+  # Minimal system configuration
+  boot.loader.grub.enable = true;
+  boot.loader.grub.device = "nodev";
+  
+  networking.hostName = "nixos";
+  
+  time.timeZone = "UTC";
+  
+  users.users.nixos = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" ];
+  };
+  
+  system.stateVersion = "24.05";
+}
+EOF
+        
+        # Verify this simpler configuration
+        if nix-instantiate --parse "$CONFIG_FILE" >/dev/null 2>&1; then
+            success "Simplified configuration.nix syntax is valid"
+        else
+            # Last resort - create the absolute minimal configuration
+            cat > "$CONFIG_FILE" << 'EOF'
+{ config, pkgs, ... }:
+
+{
+  imports = [ ./nixos-ai/nix/ai.nix ];
+  services.nixos-ai.enable = true;
+  system.stateVersion = "24.05";
+}
+EOF
+            
+            if nix-instantiate --parse "$CONFIG_FILE" >/dev/null 2>&1; then
+                success "Ultra-minimal configuration.nix syntax is valid"
+            else
+                error "All configuration attempts failed. This may be a NixOS installation issue."
+                error "Please check:"
+                error "1. NixOS is properly installed"
+                error "2. nix-instantiate is working: nix-instantiate --version"
+                error "3. The AI module exists: ls -la $INSTALL_DIR/nix/ai.nix"
+                exit 1
+            fi
+        fi
     fi
 fi
 
