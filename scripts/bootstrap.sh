@@ -151,93 +151,62 @@ fi
 # Make scripts executable
 chmod +x "$INSTALL_DIR/scripts"/*.sh
 
-# SMART APPROACH: Skip NixOS configuration entirely and create standalone installation
-log "Using smart standalone approach - skipping NixOS configuration..."
+# ULTRA-SMART APPROACH: Use a simple background process instead of systemd
+log "Using ultra-smart approach - creating background process instead of systemd..."
 
-# Create a standalone systemd service instead of relying on NixOS configuration
-log "Creating standalone systemd service..."
+# Create a simple startup script that runs the AI in the background
+log "Creating AI startup script..."
 
-# Create systemd service in user-writable location first
-log "Creating systemd service file..."
+# Create a startup script in a writable location
+STARTUP_SCRIPT="/tmp/start-ai.sh"
+cat > "$STARTUP_SCRIPT" << 'EOF'
+#!/bin/bash
+# NixOS AI Assistant Startup Script
 
-# Create service file in a writable location first
-SERVICE_FILE="/tmp/nixos-ai.service"
-cat > "$SERVICE_FILE" << 'EOF'
-[Unit]
-Description=NixOS AI Assistant - System-wide smart assistant
-Documentation=https://github.com/yaseenTarek26/Smart-Nix-OS
-After=network.target
+cd /etc/nixos/nixos-ai
 
-[Service]
-Type=simple
-ExecStart=/usr/bin/python3 /etc/nixos/nixos-ai/ai/agent.py
-WorkingDirectory=/etc/nixos/nixos-ai
-User=root
-Group=root
-Restart=on-failure
-RestartSec=5
-TimeoutStartSec=30
+# Set environment variables
+export PYTHONPATH="/etc/nixos/nixos-ai"
+export AI_CONFIG_PATH="/etc/nixos/nixos-ai/ai/config.json"
+export AI_LOGS_PATH="/etc/nixos/nixos-ai/logs"
+export AI_STATE_PATH="/etc/nixos/nixos-ai/state"
+export AI_CACHE_PATH="/etc/nixos/nixos-ai/cache"
 
-# Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/etc/nixos/nixos-ai
+# Create logs directory if it doesn't exist
+mkdir -p "$AI_LOGS_PATH"
 
-# Resource limits
-MemoryMax=512M
-CPUQuota=50%
+# Start the AI agent
+echo "$(date): Starting NixOS AI Assistant..." >> "$AI_LOGS_PATH/ai.log"
+python3 ai/agent.py >> "$AI_LOGS_PATH/ai.log" 2>&1 &
+echo $! > /tmp/nixos-ai.pid
 
-# Environment
-Environment=PYTHONPATH=/etc/nixos/nixos-ai
-Environment=AI_CONFIG_PATH=/etc/nixos/nixos-ai/ai/config.json
-Environment=AI_LOGS_PATH=/etc/nixos/nixos-ai/logs
-Environment=AI_STATE_PATH=/etc/nixos/nixos-ai/state
-Environment=AI_CACHE_PATH=/etc/nixos/nixos-ai/cache
-Environment=PATH=/usr/bin:/bin:/usr/sbin:/sbin
-
-[Install]
-WantedBy=multi-user.target
+echo "NixOS AI Assistant started with PID: $(cat /tmp/nixos-ai.pid)"
 EOF
 
-# Try to make filesystem writable and copy service file
-log "Installing systemd service..."
+chmod +x "$STARTUP_SCRIPT"
 
-# Method 1: Try to make filesystem writable
-if mount -o remount,rw / 2>/dev/null; then
-    cp "$SERVICE_FILE" /etc/systemd/system/nixos-ai.service
-    success "Installed systemd service (method 1)"
-elif mount -o remount,rw /etc 2>/dev/null; then
-    cp "$SERVICE_FILE" /etc/systemd/system/nixos-ai.service
-    success "Installed systemd service (method 2)"
+# Copy to a permanent location
+cp "$STARTUP_SCRIPT" "$INSTALL_DIR/start-ai.sh"
+chmod +x "$INSTALL_DIR/start-ai.sh"
+
+success "Created AI startup script"
+
+# Start the AI process
+log "Starting AI assistant process..."
+cd "$INSTALL_DIR"
+./start-ai.sh
+
+if [[ -f "/tmp/nixos-ai.pid" ]]; then
+    AI_PID=$(cat /tmp/nixos-ai.pid)
+    if kill -0 "$AI_PID" 2>/dev/null; then
+        success "AI assistant started with PID: $AI_PID"
+    else
+        error "AI assistant failed to start"
+        exit 1
+    fi
 else
-    # Method 3: Use a different approach - create a user service instead
-    warn "Cannot write to system systemd directory. Creating user service instead..."
-    
-    # Create user systemd directory
-    mkdir -p ~/.config/systemd/user
-    
-    # Modify service for user mode
-    sed 's/User=root/User=%i/' "$SERVICE_FILE" > ~/.config/systemd/user/nixos-ai.service
-    sed -i 's/Group=root/Group=%i/' ~/.config/systemd/user/nixos-ai.service
-    
-    # Enable user service
-    systemctl --user daemon-reload
-    systemctl --user enable nixos-ai.service
-    
-    success "Created user systemd service"
-    warn "Note: This will run as a user service, not system-wide"
-fi
-
-# Clean up temp file
-rm -f "$SERVICE_FILE"
-
-# Reload systemd to pick up the new service
-if systemctl daemon-reload 2>/dev/null; then
-    success "Reloaded systemd configuration"
-else
-    systemctl --user daemon-reload 2>/dev/null || true
+    error "AI assistant startup failed"
+    exit 1
 fi
 
 # Install Python dependencies
@@ -312,43 +281,23 @@ else
     warn "The configuration will be applied anyway - if it fails, you can fix it manually"
 fi
 
-# Skip NixOS configuration - we're using standalone approach
-log "Skipping NixOS configuration (using standalone service)..."
+# Skip NixOS configuration - we're using background process approach
+log "Skipping NixOS configuration (using background process)..."
 
-# Enable and start the AI service
-log "Starting AI assistant service..."
+# AI process is already started above, just verify it's running
+log "Verifying AI assistant is running..."
 
-# Try system service first, then user service
-if systemctl enable nixos-ai.service 2>/dev/null; then
-    success "AI service enabled (system)"
-    SERVICE_TYPE="system"
-elif systemctl --user enable nixos-ai.service 2>/dev/null; then
-    success "AI service enabled (user)"
-    SERVICE_TYPE="user"
+if [[ -f "/tmp/nixos-ai.pid" ]]; then
+    AI_PID=$(cat /tmp/nixos-ai.pid)
+    if kill -0 "$AI_PID" 2>/dev/null; then
+        success "AI assistant is running with PID: $AI_PID"
+    else
+        error "AI assistant process died"
+        exit 1
+    fi
 else
-    error "Failed to enable AI service (both system and user)"
+    error "AI assistant PID file not found"
     exit 1
-fi
-
-# Start the service
-if [[ "$SERVICE_TYPE" == "system" ]]; then
-    if systemctl start nixos-ai.service 2>/dev/null; then
-        success "AI service started (system)"
-    else
-        error "Failed to start AI service. Check the logs:"
-        error "  journalctl -u nixos-ai.service"
-        error "  systemctl status nixos-ai.service"
-        exit 1
-    fi
-else
-    if systemctl --user start nixos-ai.service 2>/dev/null; then
-        success "AI service started (user)"
-    else
-        error "Failed to start AI service. Check the logs:"
-        error "  journalctl --user -u nixos-ai.service"
-        error "  systemctl --user status nixos-ai.service"
-        exit 1
-    fi
 fi
 
 # Create command-line interface
@@ -404,32 +353,18 @@ else
     warn "CLI interface missing - you can create it manually"
 fi
 
-# Check if service is enabled and running
-if systemctl is-enabled nixos-ai.service >/dev/null 2>&1; then
-    success "AI service is enabled (system)"
-    SERVICE_TYPE="system"
-elif systemctl --user is-enabled nixos-ai.service >/dev/null 2>&1; then
-    success "AI service is enabled (user)"
-    SERVICE_TYPE="user"
+# Check if AI process is running
+if [[ -f "/tmp/nixos-ai.pid" ]]; then
+    AI_PID=$(cat /tmp/nixos-ai.pid)
+    if kill -0 "$AI_PID" 2>/dev/null; then
+        success "AI assistant is running with PID: $AI_PID"
+    else
+        error "AI assistant is not running - installation failed"
+        exit 1
+    fi
 else
-    error "AI service is not enabled - installation failed"
+    error "AI assistant PID file not found - installation failed"
     exit 1
-fi
-
-if [[ "$SERVICE_TYPE" == "system" ]]; then
-    if systemctl is-active nixos-ai.service >/dev/null 2>&1; then
-        success "AI service is running (system)"
-    else
-        error "AI service is not running - installation failed"
-        exit 1
-    fi
-else
-    if systemctl --user is-active nixos-ai.service >/dev/null 2>&1; then
-        success "AI service is running (user)"
-    else
-        error "AI service is not running - installation failed"
-        exit 1
-    fi
 fi
 
 success "NixOS AI Assistant installation completed!"
@@ -441,14 +376,14 @@ echo "  ✅ Command execution with validation"
 echo "  ✅ Real-time system monitoring"
 echo "  ✅ Comprehensive safety mechanisms"
 echo "  ✅ Robust update handling with conflict resolution"
-echo "  ✅ Standalone installation (no NixOS configuration required)"
+echo "  ✅ Background process installation (no systemd required)"
 echo ""
 echo "✅ Installation completed successfully!"
-echo "The AI service is running as a standalone systemd service."
+echo "The AI assistant is running as a background process."
 echo ""
-echo "If you need to check or restart the service:"
-echo "  systemctl status nixos-ai.service"
-echo "  systemctl restart nixos-ai.service"
+echo "If you need to check or restart the AI:"
+echo "  ps aux | grep nixos-ai"
+echo "  kill \$(cat /tmp/nixos-ai.pid) && /etc/nixos/nixos-ai/start-ai.sh"
 echo ""
 echo "Usage:"
 echo "  nixos-ai 'your command here'"
