@@ -5,6 +5,13 @@
 
 set -euo pipefail
 
+# Parse command line arguments
+FORCE_UPDATE=false
+if [[ "${1:-}" == "--force" || "${1:-}" == "-f" ]]; then
+    FORCE_UPDATE=true
+    log "Force update mode enabled"
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -65,7 +72,78 @@ log "Cloning NixOS AI repository..."
 if [[ -d "$INSTALL_DIR" ]]; then
     warn "Installation directory already exists. Updating..."
     cd "$INSTALL_DIR"
-    git pull origin main || error "Failed to update existing repository"
+    
+    # Check for local changes
+    if ! git diff --quiet; then
+        if [[ "$FORCE_UPDATE" == "true" ]]; then
+            warn "Force update mode: discarding local changes..."
+            git reset --hard HEAD
+            git clean -fd
+            success "Local changes discarded"
+        else
+            warn "Local changes detected. Attempting to handle them..."
+            
+            # Try to stash first
+            if git stash push -m "Auto-stash before update $(date)" 2>/dev/null; then
+                success "Local changes stashed successfully"
+            else
+                warn "Failed to stash local changes, trying to reset..."
+                
+                # Try to reset to clean state
+                if git reset --hard HEAD 2>/dev/null; then
+                    success "Reset to clean state"
+                else
+                    warn "Failed to reset, trying to clean untracked files..."
+                    
+                    # Clean untracked files
+                    git clean -fd 2>/dev/null || {
+                        error "Failed to handle local changes. Please resolve manually:
+                        
+                        cd $INSTALL_DIR
+                        git status
+                        git stash
+                        git pull origin main
+                        
+                        Or force update with:
+                        curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh | sudo sh -- --force"
+                    }
+                fi
+            fi
+        fi
+    fi
+    
+    # Pull latest changes
+    if git pull origin main 2>/dev/null; then
+        success "Repository updated successfully"
+        
+        # Restore stashed changes if any
+        if git stash list | grep -q "Auto-stash before update"; then
+            log "Restoring stashed changes..."
+            git stash pop || {
+                warn "Failed to restore stashed changes. You can recover them with:
+                cd $INSTALL_DIR
+                git stash list
+                git stash show -p stash@{0}"
+            }
+        fi
+    else
+        warn "Pull failed, trying force update..."
+        
+        # Force update as last resort
+        if git fetch origin main && git reset --hard origin/main 2>/dev/null; then
+            success "Repository force updated successfully"
+        else
+            error "Failed to update existing repository. Please resolve manually:
+            
+            cd $INSTALL_DIR
+            git status
+            git pull origin main
+            
+            Or force update with:
+            git fetch origin main
+            git reset --hard origin/main"
+        fi
+    fi
 else
     git clone "$REPO_URL" "$INSTALL_DIR" || error "Failed to clone repository"
 fi
@@ -249,11 +327,12 @@ fi
 success "NixOS AI Assistant installation completed!"
 echo ""
 echo "Features:"
-echo "  ✅ Multi-provider AI support (OpenAI, Anthropic, Ollama)"
+echo "  ✅ Multi-provider AI support (OpenAI, Anthropic, Ollama, Gemini)"
 echo "  ✅ Safe file editing with git snapshots"
 echo "  ✅ Command execution with validation"
 echo "  ✅ Real-time system monitoring"
 echo "  ✅ Comprehensive safety mechanisms"
+echo "  ✅ Robust update handling with conflict resolution"
 echo ""
 echo "Usage:"
 echo "  nixos-ai 'your command here'"
@@ -263,6 +342,10 @@ echo ""
 echo "Configuration:"
 echo "  Edit: /etc/nixos/nixos-ai/ai/config.json"
 echo "  Add your API keys for AI providers"
+echo ""
+echo "Updates:"
+echo "  Normal update: curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh | sudo sh"
+echo "  Force update:  curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh | sudo sh -- --force"
 echo ""
 echo "Service status:"
 echo "  systemctl status nixos-ai.service"
