@@ -7,23 +7,8 @@ let
   aiDir = "/etc/nixos/nixos-ai";
 in
 {
-  imports = [ ./service.nix ];
-
   options.services.nixos-ai = {
     enable = mkEnableOption "NixOS AI Assistant";
-    
-    # Legacy options for backward compatibility
-    apiKey = mkOption {
-      type = types.str;
-      default = "";
-      description = "OpenAI API key for the AI assistant (legacy)";
-    };
-    
-    model = mkOption {
-      type = types.str;
-      default = "gpt-4";
-      description = "AI model to use (legacy)";
-    };
     
     allowedPaths = mkOption {
       type = types.listOf types.str;
@@ -39,7 +24,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    # System packages required by the AI assistant
+    # Minimal system packages - only essential ones
     environment.systemPackages = with pkgs; [
       python3
       python3Packages.pip
@@ -47,20 +32,6 @@ in
       git
       curl
       jq
-      inotify-tools
-      # AI-specific packages - install via Nix instead of pip
-      python3Packages.openai
-      python3Packages.anthropic
-      python3Packages.google-generativeai
-      python3Packages.httpx
-      python3Packages.aiohttp
-      python3Packages.psutil
-      python3Packages.watchdog
-      python3Packages.structlog
-      python3Packages.pydantic
-      python3Packages.typer
-      python3Packages.aiofiles
-      python3Packages.python-dotenv
     ];
 
     # Create the AI directory structure
@@ -69,10 +40,44 @@ in
       "d ${aiDir}/logs 0755 root root -"
       "d ${aiDir}/state 0755 root root -"
       "d ${aiDir}/cache 0755 root root -"
-      "d ${aiDir}/backups 0755 root root -"
     ];
 
-    # Note: This module should be imported in your configuration.nix
-    # The actual service configuration is in service.nix
+    # Systemd service for the AI assistant
+    systemd.services.nixos-ai = {
+      description = "NixOS AI Assistant - System-wide smart assistant";
+      documentation = [ "https://github.com/yaseenTarek26/Smart-Nix-OS" ];
+      
+      wantedBy = [ "multi-user.target" ];
+      after = [ "network.target" ];
+      
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = "${pkgs.python3}/bin/python3 ${aiDir}/ai/agent.py";
+        WorkingDirectory = aiDir;
+        User = "root";
+        Group = "root";
+        Restart = "on-failure";
+        RestartSec = 5;
+        
+        # Security settings
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        ReadWritePaths = [ aiDir ];
+        
+        # Resource limits
+        MemoryMax = "512M";
+        CPUQuota = "50%";
+      };
+      
+      environment = {
+        PYTHONPATH = "${aiDir}";
+        AI_CONFIG_PATH = "${aiDir}/ai/config.json";
+        AI_LOGS_PATH = "${aiDir}/logs";
+        AI_STATE_PATH = "${aiDir}/state";
+        AI_CACHE_PATH = "${aiDir}/cache";
+      };
+    };
   };
 }
