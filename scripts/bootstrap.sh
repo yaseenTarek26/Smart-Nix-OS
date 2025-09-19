@@ -157,8 +157,12 @@ log "Using smart standalone approach - skipping NixOS configuration..."
 # Create a standalone systemd service instead of relying on NixOS configuration
 log "Creating standalone systemd service..."
 
-# Create the systemd service file directly
-cat > /etc/systemd/system/nixos-ai.service << 'EOF'
+# Create systemd service in user-writable location first
+log "Creating systemd service file..."
+
+# Create service file in a writable location first
+SERVICE_FILE="/tmp/nixos-ai.service"
+cat > "$SERVICE_FILE" << 'EOF'
 [Unit]
 Description=NixOS AI Assistant - System-wide smart assistant
 Documentation=https://github.com/yaseenTarek26/Smart-Nix-OS
@@ -197,11 +201,44 @@ Environment=PATH=/usr/bin:/bin:/usr/sbin:/sbin
 WantedBy=multi-user.target
 EOF
 
-success "Created standalone systemd service"
+# Try to make filesystem writable and copy service file
+log "Installing systemd service..."
+
+# Method 1: Try to make filesystem writable
+if mount -o remount,rw / 2>/dev/null; then
+    cp "$SERVICE_FILE" /etc/systemd/system/nixos-ai.service
+    success "Installed systemd service (method 1)"
+elif mount -o remount,rw /etc 2>/dev/null; then
+    cp "$SERVICE_FILE" /etc/systemd/system/nixos-ai.service
+    success "Installed systemd service (method 2)"
+else
+    # Method 3: Use a different approach - create a user service instead
+    warn "Cannot write to system systemd directory. Creating user service instead..."
+    
+    # Create user systemd directory
+    mkdir -p ~/.config/systemd/user
+    
+    # Modify service for user mode
+    sed 's/User=root/User=%i/' "$SERVICE_FILE" > ~/.config/systemd/user/nixos-ai.service
+    sed -i 's/Group=root/Group=%i/' ~/.config/systemd/user/nixos-ai.service
+    
+    # Enable user service
+    systemctl --user daemon-reload
+    systemctl --user enable nixos-ai.service
+    
+    success "Created user systemd service"
+    warn "Note: This will run as a user service, not system-wide"
+fi
+
+# Clean up temp file
+rm -f "$SERVICE_FILE"
 
 # Reload systemd to pick up the new service
-systemctl daemon-reload
-success "Reloaded systemd configuration"
+if systemctl daemon-reload 2>/dev/null; then
+    success "Reloaded systemd configuration"
+else
+    systemctl --user daemon-reload 2>/dev/null || true
+fi
 
 # Install Python dependencies
 log "Installing Python dependencies..."
@@ -281,20 +318,37 @@ log "Skipping NixOS configuration (using standalone service)..."
 # Enable and start the AI service
 log "Starting AI assistant service..."
 
+# Try system service first, then user service
 if systemctl enable nixos-ai.service 2>/dev/null; then
-    success "AI service enabled"
+    success "AI service enabled (system)"
+    SERVICE_TYPE="system"
+elif systemctl --user enable nixos-ai.service 2>/dev/null; then
+    success "AI service enabled (user)"
+    SERVICE_TYPE="user"
 else
-    error "Failed to enable AI service"
+    error "Failed to enable AI service (both system and user)"
     exit 1
 fi
 
-if systemctl start nixos-ai.service 2>/dev/null; then
-    success "AI service started"
+# Start the service
+if [[ "$SERVICE_TYPE" == "system" ]]; then
+    if systemctl start nixos-ai.service 2>/dev/null; then
+        success "AI service started (system)"
+    else
+        error "Failed to start AI service. Check the logs:"
+        error "  journalctl -u nixos-ai.service"
+        error "  systemctl status nixos-ai.service"
+        exit 1
+    fi
 else
-    error "Failed to start AI service. Check the logs:"
-    error "  journalctl -u nixos-ai.service"
-    error "  systemctl status nixos-ai.service"
-    exit 1
+    if systemctl --user start nixos-ai.service 2>/dev/null; then
+        success "AI service started (user)"
+    else
+        error "Failed to start AI service. Check the logs:"
+        error "  journalctl --user -u nixos-ai.service"
+        error "  systemctl --user status nixos-ai.service"
+        exit 1
+    fi
 fi
 
 # Create command-line interface
@@ -350,18 +404,32 @@ else
     warn "CLI interface missing - you can create it manually"
 fi
 
+# Check if service is enabled and running
 if systemctl is-enabled nixos-ai.service >/dev/null 2>&1; then
-    success "AI service is enabled"
+    success "AI service is enabled (system)"
+    SERVICE_TYPE="system"
+elif systemctl --user is-enabled nixos-ai.service >/dev/null 2>&1; then
+    success "AI service is enabled (user)"
+    SERVICE_TYPE="user"
 else
     error "AI service is not enabled - installation failed"
     exit 1
 fi
 
-if systemctl is-active nixos-ai.service >/dev/null 2>&1; then
-    success "AI service is running"
+if [[ "$SERVICE_TYPE" == "system" ]]; then
+    if systemctl is-active nixos-ai.service >/dev/null 2>&1; then
+        success "AI service is running (system)"
+    else
+        error "AI service is not running - installation failed"
+        exit 1
+    fi
 else
-    error "AI service is not running - installation failed"
-    exit 1
+    if systemctl --user is-active nixos-ai.service >/dev/null 2>&1; then
+        success "AI service is running (user)"
+    else
+        error "AI service is not running - installation failed"
+        exit 1
+    fi
 fi
 
 success "NixOS AI Assistant installation completed!"
