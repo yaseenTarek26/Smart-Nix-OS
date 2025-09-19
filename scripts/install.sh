@@ -38,10 +38,15 @@ cd "$INSTALL_DIR"
 # Clone or update repository
 if [[ -d ".git" ]]; then
     log "Updating existing installation..."
-    git pull origin main
+    git pull origin main || {
+        warn "Git pull failed, continuing with existing files..."
+    }
 else
     log "Cloning repository..."
-    git clone "$REPO_URL" .
+    git clone "$REPO_URL" . || {
+        error "Failed to clone repository. Please check your internet connection."
+        exit 1
+    }
 fi
 
 # Install Python dependencies

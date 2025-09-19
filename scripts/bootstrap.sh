@@ -29,9 +29,9 @@ if [[ $EUID -eq 0 ]]; then
     exit 1
 fi
 
-# Download and run the simple installer
-log "Downloading simple installer..."
-curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/install.sh -o /tmp/install-ai.sh
+# Download and run the standalone installer
+log "Downloading standalone installer..."
+curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/standalone_install.sh -o /tmp/install-ai.sh
 
 if [[ -f "/tmp/install-ai.sh" ]]; then
     log "Running installer..."
