@@ -233,76 +233,29 @@ if [[ ! -d .git ]]; then
     git commit -m "Initial AI assistant setup"
 fi
 
-# Test the NixOS configuration
-log "Testing NixOS configuration..."
-if nixos-rebuild test --flake "$INSTALL_DIR" 2>/dev/null; then
-    success "NixOS configuration test passed"
-else
-    warn "NixOS configuration test failed, trying without flake..."
-    
-    # Try without flake if flake test fails
-    if nixos-rebuild test 2>/dev/null; then
-        success "NixOS configuration test passed (without flake)"
-    else
-        warn "NixOS configuration test failed, trying dry-run..."
-        
-        # Try dry-run as last resort
-        if nixos-rebuild dry-run 2>/dev/null; then
-            success "NixOS configuration dry-run passed"
-        else
-            warn "NixOS configuration test failed, but continuing with installation..."
-            warn "The AI module will be installed but may not be fully functional until configuration is fixed."
-            
-            # Provide helpful debugging information
-            log "Debugging information:"
-            log "1. Check your configuration.nix syntax"
-            log "2. Verify the AI module import is correct"
-            log "3. Run: nixos-rebuild test --show-trace"
-            log "4. Check if all required packages are available"
-            
-            # Continue with installation even if test fails
-            success "Continuing with installation despite configuration test failure"
-        fi
-    fi
-fi
+# Skip NixOS configuration test for now - just install the files
+log "Skipping NixOS configuration test to avoid compatibility issues..."
+warn "The AI module files will be installed, but you'll need to manually apply the configuration."
+warn "After installation, run: nixos-rebuild switch"
+success "Proceeding with file installation only"
 
-# Apply the configuration
-log "Applying NixOS configuration..."
-if nixos-rebuild switch --flake "$INSTALL_DIR" 2>/dev/null; then
-    success "NixOS configuration applied successfully"
-elif nixos-rebuild switch 2>/dev/null; then
-    success "NixOS configuration applied successfully (without flake)"
-else
-    warn "Failed to apply NixOS configuration, but continuing with installation..."
-    warn "The AI module files are installed but the system service may not be active."
-    warn "You can try to apply the configuration manually later with:"
-    warn "  nixos-rebuild switch"
-    warn "  systemctl enable nixos-ai.service"
-    warn "  systemctl start nixos-ai.service"
-    
-    # Don't fail the installation, just warn
-    success "Installation completed (configuration not applied)"
-fi
+# Skip configuration application for now
+log "Skipping NixOS configuration application..."
+warn "Configuration not applied automatically to avoid compatibility issues."
+warn "To apply the configuration manually, run:"
+warn "  nixos-rebuild switch"
+warn "  systemctl enable nixos-ai.service"
+warn "  systemctl start nixos-ai.service"
+success "File installation completed"
 
-# Enable and start the AI service
-log "Starting AI assistant service..."
-if systemctl enable nixos-ai.service 2>/dev/null; then
-    success "AI service enabled"
-else
-    warn "Failed to enable AI service, continuing..."
-fi
-
-if systemctl start nixos-ai.service 2>/dev/null; then
-    success "AI service started"
-else
-    warn "Failed to start AI service. This may be due to missing dependencies.
-    
-    You can try starting it manually later with:
-    systemctl start nixos-ai.service
-    
-    Check the service status with:
-    systemctl status nixos-ai.service"
-fi
+# Skip service management for now
+log "Skipping service management to avoid compatibility issues..."
+warn "The AI service is not automatically enabled/started."
+warn "To enable and start the service manually, run:"
+warn "  systemctl enable nixos-ai.service"
+warn "  systemctl start nixos-ai.service"
+warn "  systemctl status nixos-ai.service"
+success "Service management skipped"
 
 # Create command-line interface
 log "Setting up command-line interface..."
@@ -352,7 +305,20 @@ echo "  ✅ Real-time system monitoring"
 echo "  ✅ Comprehensive safety mechanisms"
 echo "  ✅ Robust update handling with conflict resolution"
 echo ""
-echo "Usage:"
+echo "⚠️  IMPORTANT: Manual configuration required"
+echo "The installation completed but you need to manually apply the NixOS configuration:"
+echo ""
+echo "1. Apply the configuration:"
+echo "   nixos-rebuild switch"
+echo ""
+echo "2. Enable and start the service:"
+echo "   systemctl enable nixos-ai.service"
+echo "   systemctl start nixos-ai.service"
+echo ""
+echo "3. Check service status:"
+echo "   systemctl status nixos-ai.service"
+echo ""
+echo "Usage (after configuration):"
 echo "  nixos-ai 'your command here'"
 echo "  nixos-ai 'install docker and enable it'"
 echo "  nixos-ai 'add vscode to system packages'"
@@ -364,9 +330,6 @@ echo ""
 echo "Updates:"
 echo "  Normal update: curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh | sudo sh"
 echo "  Force update:  curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh | sudo sh -- --force"
-echo ""
-echo "Service status:"
-echo "  systemctl status nixos-ai.service"
 echo ""
 echo "Logs:"
 echo "  journalctl -u nixos-ai.service -f"

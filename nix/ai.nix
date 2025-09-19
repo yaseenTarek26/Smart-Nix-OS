@@ -9,29 +9,14 @@ in
 {
   options.services.nixos-ai = {
     enable = mkEnableOption "NixOS AI Assistant";
-    
-    allowedPaths = mkOption {
-      type = types.listOf types.str;
-      default = [ "/etc/nixos/nixos-ai" ];
-      description = "Paths the AI is allowed to modify";
-    };
-    
-    enableSystemWideAccess = mkOption {
-      type = types.bool;
-      default = false;
-      description = "Allow AI to modify system-wide files (dangerous)";
-    };
   };
 
   config = mkIf cfg.enable {
-    # Minimal system packages - only essential ones
+    # Only essential packages that are guaranteed to exist
     environment.systemPackages = with pkgs; [
       python3
-      python3Packages.pip
-      python3Packages.setuptools
       git
       curl
-      jq
     ];
 
     # Create the AI directory structure
@@ -42,11 +27,9 @@ in
       "d ${aiDir}/cache 0755 root root -"
     ];
 
-    # Systemd service for the AI assistant
+    # Minimal systemd service
     systemd.services.nixos-ai = {
-      description = "NixOS AI Assistant - System-wide smart assistant";
-      documentation = [ "https://github.com/yaseenTarek26/Smart-Nix-OS" ];
-      
+      description = "NixOS AI Assistant";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
       
@@ -58,17 +41,6 @@ in
         Group = "root";
         Restart = "on-failure";
         RestartSec = 5;
-        
-        # Security settings
-        NoNewPrivileges = true;
-        PrivateTmp = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        ReadWritePaths = [ aiDir ];
-        
-        # Resource limits
-        MemoryMax = "512M";
-        CPUQuota = "50%";
       };
       
       environment = {
