@@ -151,201 +151,57 @@ fi
 # Make scripts executable
 chmod +x "$INSTALL_DIR/scripts"/*.sh
 
-# Add import to configuration.nix if not already present
-log "Adding AI module import to configuration.nix..."
+# SMART APPROACH: Skip NixOS configuration entirely and create standalone installation
+log "Using smart standalone approach - skipping NixOS configuration..."
 
-# Pre-check: Look for the specific error pattern we're seeing
-if head -1 "$CONFIG_FILE" | grep -q "^[[:space:]]*imports[[:space:]]*="; then
-    warn "Found malformed configuration.nix with imports at top level - this is the exact error we need to fix"
-fi
+# Create a standalone systemd service instead of relying on NixOS configuration
+log "Creating standalone systemd service..."
 
-# Check and fix configuration.nix syntax
-log "Checking and fixing configuration.nix syntax..."
+# Create the systemd service file directly
+cat > /etc/systemd/system/nixos-ai.service << 'EOF'
+[Unit]
+Description=NixOS AI Assistant - System-wide smart assistant
+Documentation=https://github.com/yaseenTarek26/Smart-Nix-OS
+After=network.target
 
-# Verify the AI module exists
-if [[ ! -f "$INSTALL_DIR/nix/ai.nix" ]]; then
-    error "AI module file not found: $INSTALL_DIR/nix/ai.nix"
-    error "Installation directory may not be correct. Please check the installation."
-    exit 1
-fi
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /etc/nixos/nixos-ai/ai/agent.py
+WorkingDirectory=/etc/nixos/nixos-ai
+User=root
+Group=root
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=30
 
-# Create a backup
-cp "$CONFIG_FILE" "$CONFIG_FILE.backup"
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/nixos/nixos-ai
 
-# Check if file starts with imports = (malformed)
-if head -1 "$CONFIG_FILE" | grep -q "^[[:space:]]*imports[[:space:]]*="; then
-    warn "Detected malformed configuration.nix (imports at top level). Fixing..."
-    
-    # Read the entire file and wrap it properly
-    CONTENT=$(cat "$CONFIG_FILE")
-    
-    # Create proper NixOS configuration
-    cat > "$CONFIG_FILE" << EOF
-{
-  # NixOS AI Assistant
-  imports = [ ./nixos-ai/nix/ai.nix ];
-  services.nixos-ai.enable = true;
-  
-  # Original configuration content
-$CONTENT
-}
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+
+# Environment
+Environment=PYTHONPATH=/etc/nixos/nixos-ai
+Environment=AI_CONFIG_PATH=/etc/nixos/nixos-ai/ai/config.json
+Environment=AI_LOGS_PATH=/etc/nixos/nixos-ai/logs
+Environment=AI_STATE_PATH=/etc/nixos/nixos-ai/state
+Environment=AI_CACHE_PATH=/etc/nixos/nixos-ai/cache
+Environment=PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+[Install]
+WantedBy=multi-user.target
 EOF
-    
-    success "Fixed malformed configuration.nix syntax"
-    
-elif ! grep -q "^[[:space:]]*{" "$CONFIG_FILE"; then
-    warn "Configuration.nix missing opening brace. Fixing..."
-    
-    # Wrap the entire file in proper NixOS syntax
-    {
-        echo "{"
-        cat "$CONFIG_FILE"
-        echo ""
-        echo "  # NixOS AI Assistant"
-        echo "  imports = [ ./nixos-ai/nix/ai.nix ];"
-        echo "  services.nixos-ai.enable = true;"
-        echo "}"
-    } > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
-    
-    success "Wrapped configuration.nix in proper syntax"
-    
-else
-    # File has proper syntax, just add the import if not present
-    if ! grep -q "nixos-ai/nix/ai.nix" "$CONFIG_FILE"; then
-        # Add the import line before the closing brace
-        sed -i '/^[[:space:]]*}[[:space:]]*$/i\  imports = [ ./nixos-ai/nix/ai.nix ];\n  services.nixos-ai.enable = true;' "$CONFIG_FILE"
-        success "Added AI module import to configuration.nix"
-    else
-        warn "AI module import already present in configuration.nix"
-    fi
-fi
 
-# Verify the configuration syntax
-log "Verifying configuration.nix syntax..."
-log "Current configuration.nix content:"
-head -5 "$CONFIG_FILE" | while read line; do
-    log "  $line"
-done
+success "Created standalone systemd service"
 
-if nix-instantiate --parse "$CONFIG_FILE" >/dev/null 2>&1; then
-    success "Configuration.nix syntax is valid"
-else
-    log "Configuration syntax check failed. Error details:"
-    nix-instantiate --parse "$CONFIG_FILE" 2>&1 | head -10 | while read line; do
-        log "  $line"
-    done
-    warn "Configuration.nix syntax is still invalid. Creating a minimal working configuration..."
-    
-    # Create a minimal working NixOS configuration
-    cat > "$CONFIG_FILE" << 'EOF'
-{
-  # NixOS AI Assistant
-  imports = [ ./nixos-ai/nix/ai.nix ];
-  services.nixos-ai.enable = true;
-  
-  # Basic system configuration
-  boot.loader.grub.enable = true;
-  boot.loader.grub.device = "nodev";
-  boot.loader.grub.efiSupport = true;
-  boot.loader.efi.canTouchEfiVariables = true;
-  
-  networking.hostName = "nixos";
-  networking.networkmanager.enable = true;
-  
-  time.timeZone = "UTC";
-  
-  i18n.defaultLocale = "en_US.UTF-8";
-  i18n.extraLocaleSettings = {
-    LC_ADDRESS = "en_US.UTF-8";
-    LC_IDENTIFICATION = "en_US.UTF-8";
-    LC_MEASUREMENT = "en_US.UTF-8";
-    LC_MONETARY = "en_US.UTF-8";
-    LC_NAME = "en_US.UTF-8";
-    LC_NUMERIC = "en_US.UTF-8";
-    LC_PAPER = "en_US.UTF-8";
-    LC_TELEPHONE = "en_US.UTF-8";
-    LC_TIME = "en_US.UTF-8";
-  };
-  
-  services.xserver.enable = true;
-  services.xserver.displayManager.gdm.enable = true;
-  services.xserver.desktopManager.gnome.enable = true;
-  
-  users.users.nixos = {
-    isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" ];
-    packages = with pkgs; [];
-  };
-  
-  nixpkgs.config.allowUnfree = true;
-  
-  system.stateVersion = "24.05";
-}
-EOF
-    
-    success "Created minimal working NixOS configuration with AI assistant"
-    
-    # Verify the new configuration
-    log "Verifying the minimal configuration..."
-    if nix-instantiate --parse "$CONFIG_FILE" >/dev/null 2>&1; then
-        success "New configuration.nix syntax is valid"
-    else
-        warn "Minimal configuration still invalid. Trying alternative approach..."
-        
-        # Try a different approach - create a very basic configuration
-        cat > "$CONFIG_FILE" << 'EOF'
-{ config, pkgs, ... }:
-
-{
-  # NixOS AI Assistant
-  imports = [ ./nixos-ai/nix/ai.nix ];
-  services.nixos-ai.enable = true;
-  
-  # Minimal system configuration
-  boot.loader.grub.enable = true;
-  boot.loader.grub.device = "nodev";
-  
-  networking.hostName = "nixos";
-  
-  time.timeZone = "UTC";
-  
-  users.users.nixos = {
-    isNormalUser = true;
-    extraGroups = [ "wheel" ];
-  };
-  
-  system.stateVersion = "24.05";
-}
-EOF
-        
-        # Verify this simpler configuration
-        if nix-instantiate --parse "$CONFIG_FILE" >/dev/null 2>&1; then
-            success "Simplified configuration.nix syntax is valid"
-        else
-            # Last resort - create the absolute minimal configuration
-            cat > "$CONFIG_FILE" << 'EOF'
-{ config, pkgs, ... }:
-
-{
-  imports = [ ./nixos-ai/nix/ai.nix ];
-  services.nixos-ai.enable = true;
-  system.stateVersion = "24.05";
-}
-EOF
-            
-            if nix-instantiate --parse "$CONFIG_FILE" >/dev/null 2>&1; then
-                success "Ultra-minimal configuration.nix syntax is valid"
-            else
-                error "All configuration attempts failed. This may be a NixOS installation issue."
-                error "Please check:"
-                error "1. NixOS is properly installed"
-                error "2. nix-instantiate is working: nix-instantiate --version"
-                error "3. The AI module exists: ls -la $INSTALL_DIR/nix/ai.nix"
-                exit 1
-            fi
-        fi
-    fi
-fi
+# Reload systemd to pick up the new service
+systemctl daemon-reload
+success "Reloaded systemd configuration"
 
 # Install Python dependencies
 log "Installing Python dependencies..."
@@ -419,32 +275,11 @@ else
     warn "The configuration will be applied anyway - if it fails, you can fix it manually"
 fi
 
-# Apply the configuration
-log "Applying NixOS configuration..."
-log "This may take a few minutes and might open an editor..."
-
-# Try to apply configuration with better error handling
-if nixos-rebuild switch 2>&1 | tee /tmp/nixos-rebuild.log; then
-    success "NixOS configuration applied successfully"
-else
-    error "Failed to apply NixOS configuration. This is required for the AI service to work."
-    error "Please run the following commands manually:"
-    error "1. nixos-rebuild switch"
-    error "2. systemctl enable nixos-ai.service"
-    error "3. systemctl start nixos-ai.service"
-    error "Check the log: cat /tmp/nixos-rebuild.log"
-    exit 1
-fi
+# Skip NixOS configuration - we're using standalone approach
+log "Skipping NixOS configuration (using standalone service)..."
 
 # Enable and start the AI service
 log "Starting AI assistant service..."
-
-# Check if the service exists
-if ! systemctl list-unit-files | grep -q nixos-ai.service; then
-    error "nixos-ai.service not found. The NixOS configuration may not have been applied correctly."
-    error "Please run: nixos-rebuild switch"
-    exit 1
-fi
 
 if systemctl enable nixos-ai.service 2>/dev/null; then
     success "AI service enabled"
@@ -538,9 +373,10 @@ echo "  ✅ Command execution with validation"
 echo "  ✅ Real-time system monitoring"
 echo "  ✅ Comprehensive safety mechanisms"
 echo "  ✅ Robust update handling with conflict resolution"
+echo "  ✅ Standalone installation (no NixOS configuration required)"
 echo ""
 echo "✅ Installation completed successfully!"
-echo "The NixOS configuration has been applied and the service should be running."
+echo "The AI service is running as a standalone systemd service."
 echo ""
 echo "If you need to check or restart the service:"
 echo "  systemctl status nixos-ai.service"
