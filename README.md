@@ -21,9 +21,18 @@ A system-wide smart assistant for NixOS that provides natural language interface
 
 ### One-Command Install
 
+**Method 1 (Recommended):**
 ```bash
 # Download and run the bootstrap script (requires sudo)
-sudo sh <(curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh)
+curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh | sudo sh
+```
+
+**Method 2 (Alternative):**
+```bash
+# Download first, then run (requires sudo)
+curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh -o bootstrap.sh
+sudo sh bootstrap.sh
+rm bootstrap.sh
 ```
 
 ### Manual Installation

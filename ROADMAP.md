@@ -123,7 +123,7 @@ nixos-ai/
 ### Installation
 ```bash
 # One-command installation (requires sudo)
-sudo sh <(curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh)
+curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh | sudo sh
 ```
 
 ### Basic Usage

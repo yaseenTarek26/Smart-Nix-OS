@@ -39,11 +39,12 @@ success() {
 if [[ $EUID -ne 0 ]]; then
    error "This script must be run as root. Please run with sudo:
    
-   sudo sh <(curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh)
+   curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh | sudo sh
    
    Or download and run manually:
    curl -s https://raw.githubusercontent.com/yaseenTarek26/Smart-Nix-OS/main/scripts/bootstrap.sh -o bootstrap.sh
-   sudo sh bootstrap.sh"
+   sudo sh bootstrap.sh
+   rm bootstrap.sh"
 fi
 
 # Check if we're on NixOS
