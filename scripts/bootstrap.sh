@@ -153,21 +153,38 @@ chmod +x "$INSTALL_DIR/scripts"/*.sh
 
 # Add import to configuration.nix if not already present
 log "Adding AI module import to configuration.nix..."
-if ! grep -q "nixos-ai/nix/ai.nix" "$CONFIG_FILE"; then
-    # Create a backup of the original
+
+# Check if the file has proper NixOS syntax (wrapped in { })
+if ! grep -q "^[[:space:]]*{" "$CONFIG_FILE"; then
+    warn "Configuration.nix is not properly formatted. Fixing syntax..."
+    
+    # Create a backup
     cp "$CONFIG_FILE" "$CONFIG_FILE.backup"
     
-    # Add the import
-    if grep -q "imports = \[" "$CONFIG_FILE"; then
-        # Add to existing imports array
-        sed -i '/imports = \[/a\  ./nixos-ai/nix/ai.nix' "$CONFIG_FILE"
-    else
-        # Create imports array
-        sed -i '1i\imports = [ ./nixos-ai/nix/ai.nix ];' "$CONFIG_FILE"
-    fi
-    success "Added AI module import to configuration.nix"
+    # Wrap the entire file in proper NixOS syntax
+    {
+        echo "{"
+        cat "$CONFIG_FILE"
+        echo ""
+        echo "  # NixOS AI Assistant"
+        echo "  imports = [ ./nixos-ai/nix/ai.nix ];"
+        echo "  services.nixos-ai.enable = true;"
+        echo "}"
+    } > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+    
+    success "Fixed configuration.nix syntax and added AI module"
 else
-    warn "AI module import already present in configuration.nix"
+    # File has proper syntax, just add the import if not present
+    if ! grep -q "nixos-ai/nix/ai.nix" "$CONFIG_FILE"; then
+        # Create a backup
+        cp "$CONFIG_FILE" "$CONFIG_FILE.backup"
+        
+        # Add the import line before the closing brace
+        sed -i '/^[[:space:]]*}[[:space:]]*$/i\  imports = [ ./nixos-ai/nix/ai.nix ];\n  services.nixos-ai.enable = true;' "$CONFIG_FILE"
+        success "Added AI module import to configuration.nix"
+    else
+        warn "AI module import already present in configuration.nix"
+    fi
 fi
 
 # Install Python dependencies
