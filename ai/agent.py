@@ -67,17 +67,71 @@ class NixOSAIAgent:
     
     def _setup_ai_client(self):
         """Set up AI client based on configuration"""
-        if self.config.api_key:
+        active_provider = self.config.active_provider
+        
+        if active_provider == "openai" and self.config.api_key:
             try:
                 import openai
                 openai.api_key = self.config.api_key
                 return openai
             except ImportError:
-                self.logger.warning("OpenAI library not available, using mock AI")
-                return self._create_mock_ai()
+                self.logger.warning("OpenAI library not available, trying fallback")
+                return self._try_fallback_providers()
+        elif active_provider == "gemini":
+            gemini_client = self._setup_gemini_client()
+            if gemini_client:
+                return gemini_client
+            else:
+                self.logger.warning("Gemini setup failed, trying fallback")
+                return self._try_fallback_providers()
+        elif active_provider == "anthropic":
+            try:
+                import anthropic
+                api_key = self.config.get_api_key("anthropic")
+                if api_key:
+                    return anthropic.Anthropic(api_key=api_key)
+                else:
+                    self.logger.warning("No Anthropic API key provided, trying fallback")
+                    return self._try_fallback_providers()
+            except ImportError:
+                self.logger.warning("Anthropic library not available, trying fallback")
+                return self._try_fallback_providers()
+        elif active_provider == "ollama":
+            # Ollama doesn't need API key, but we need to implement it
+            self.logger.warning("Ollama provider not yet implemented, trying fallback")
+            return self._try_fallback_providers()
         else:
-            self.logger.warning("No API key provided, using mock AI")
+            self.logger.warning(f"Unknown provider: {active_provider}, using mock AI")
             return self._create_mock_ai()
+    
+    def _try_fallback_providers(self):
+        """Try fallback providers in order"""
+        for provider in self.config.fallback_providers:
+            if provider == "gemini":
+                gemini_client = self._setup_gemini_client()
+                if gemini_client:
+                    self.logger.info(f"Using fallback provider: {provider}")
+                    return gemini_client
+            elif provider == "openai" and self.config.api_key:
+                try:
+                    import openai
+                    openai.api_key = self.config.api_key
+                    self.logger.info(f"Using fallback provider: {provider}")
+                    return openai
+                except ImportError:
+                    continue
+            elif provider == "anthropic":
+                try:
+                    import anthropic
+                    api_key = self.config.get_api_key("anthropic")
+                    if api_key:
+                        self.logger.info(f"Using fallback provider: {provider}")
+                        return anthropic.Anthropic(api_key=api_key)
+                except ImportError:
+                    continue
+        
+        self.logger.warning("All providers failed, using mock AI")
+        return self._create_mock_ai()
     
     def _create_mock_ai(self):
         """Create a mock AI client for testing"""
@@ -130,6 +184,80 @@ class NixOSAIAgent:
                 }
         
         return MockAI()
+    
+    def _setup_gemini_client(self):
+        """Set up Gemini AI client"""
+        try:
+            import google.generativeai as genai
+            
+            # Get Gemini configuration
+            gemini_config = self.config.ai_models.get("gemini", {})
+            api_key = gemini_config.get("api_key", "")
+            base_url = gemini_config.get("base_url", "https://generativelanguage.googleapis.com/v1beta")
+            
+            if not api_key:
+                self.logger.warning("No Gemini API key provided")
+                return None
+            
+            # Configure Gemini
+            genai.configure(api_key=api_key)
+            
+            # Create a wrapper class to match OpenAI interface
+            class GeminiClient:
+                def __init__(self, config):
+                    self.config = config
+                    self.model_name = config.get("default_model", "gemini-pro")
+                
+                def chat_completion(self, messages, model=None, **kwargs):
+                    try:
+                        # Use specified model or default
+                        model_name = model or self.model_name
+                        
+                        # Convert messages to Gemini format
+                        prompt = ""
+                        for message in messages:
+                            role = message.get("role", "user")
+                            content = message.get("content", "")
+                            if role == "system":
+                                prompt += f"System: {content}\n\n"
+                            elif role == "user":
+                                prompt += f"User: {content}\n\n"
+                            elif role == "assistant":
+                                prompt += f"Assistant: {content}\n\n"
+                        
+                        # Generate response using Gemini
+                        model = genai.GenerativeModel(model_name)
+                        response = model.generate_content(prompt)
+                        
+                        # Convert to OpenAI format
+                        return {
+                            "choices": [{
+                                "message": {
+                                    "content": response.text
+                                }
+                            }]
+                        }
+                    except Exception as e:
+                        self.logger.error(f"Gemini API error: {e}")
+                        return {
+                            "choices": [{
+                                "message": {
+                                    "content": json.dumps({
+                                        "action": "error",
+                                        "message": f"Gemini API error: {str(e)}"
+                                    })
+                                }
+                            }]
+                        }
+            
+            return GeminiClient(gemini_config)
+            
+        except ImportError:
+            self.logger.warning("Google Generative AI library not available. Install with: pip install google-generativeai")
+            return None
+        except Exception as e:
+            self.logger.error(f"Error setting up Gemini client: {e}")
+            return None
     
     async def process_request(self, user_input: str) -> Dict[str, Any]:
         """Process a user request and return the result"""

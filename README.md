@@ -103,6 +103,14 @@ The AI assistant can be configured through `/etc/nixos/nixos-ai/ai/config.json`:
       },
       "default_model": "claude-3-opus"
     },
+    "gemini": {
+      "api_key": "your-gemini-api-key",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "models": {
+        "gemini-pro": {"temperature": 0.7, "max_tokens": 2000, "timeout": 300}
+      },
+      "default_model": "gemini-pro"
+    },
     "ollama": {
       "api_key": "",
       "base_url": "http://localhost:11434",
@@ -113,7 +121,7 @@ The AI assistant can be configured through `/etc/nixos/nixos-ai/ai/config.json`:
     }
   },
   "active_provider": "openai",
-  "fallback_providers": ["ollama", "anthropic"],
+  "fallback_providers": ["gemini", "ollama", "anthropic"],
   "allowed_paths": ["/etc/nixos/nixos-ai"],
   "enable_system_wide_access": false,
   "auto_commit": true,
@@ -136,6 +144,7 @@ The AI assistant can be configured through `/etc/nixos/nixos-ai/ai/config.json`:
 ### Supported AI Providers
 
 - **OpenAI**: GPT-4, GPT-3.5-turbo
+- **Google Gemini**: Gemini Pro, Gemini Pro Vision
 - **Anthropic**: Claude-3-opus, Claude-3-sonnet
 - **Ollama**: Local models (llama2, codellama)
 - **Custom**: Add your own providers

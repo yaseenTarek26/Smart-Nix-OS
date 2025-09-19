@@ -50,10 +50,27 @@
         }
       },
       "default_model": "claude-3-opus"
+    },
+    "gemini": {
+      "api_key": "AIzaSyAc3O6m6QTP_eXMEVZcJqA2-ynXz7KD2cA",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "models": {
+        "gemini-pro": {
+          "temperature": 0.7,
+          "max_tokens": 2000,
+          "timeout": 300
+        },
+        "gemini-pro-vision": {
+          "temperature": 0.7,
+          "max_tokens": 2000,
+          "timeout": 300
+        }
+      },
+      "default_model": "gemini-pro"
     }
   },
   "active_provider": "openai",
-  "fallback_providers": ["ollama", "anthropic"],
+  "fallback_providers": ["gemini", "ollama", "anthropic"],
   "allowed_paths": [
     "/etc/nixos/nixos-ai"
   ],
