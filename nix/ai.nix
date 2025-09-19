@@ -12,11 +12,14 @@ in
   };
 
   config = mkIf cfg.enable {
-    # Only essential packages that are guaranteed to exist
+    # Essential packages
     environment.systemPackages = with pkgs; [
       python3
+      python3Packages.pip
+      python3Packages.setuptools
       git
       curl
+      jq
     ];
 
     # Create the AI directory structure
@@ -27,7 +30,7 @@ in
       "d ${aiDir}/cache 0755 root root -"
     ];
 
-    # Minimal systemd service
+    # Systemd service
     systemd.services.nixos-ai = {
       description = "NixOS AI Assistant";
       wantedBy = [ "multi-user.target" ];
@@ -41,6 +44,18 @@ in
         Group = "root";
         Restart = "on-failure";
         RestartSec = 5;
+        TimeoutStartSec = 30;
+        
+        # Security settings
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        ReadWritePaths = [ aiDir ];
+        
+        # Resource limits
+        MemoryMax = "512M";
+        CPUQuota = "50%";
       };
       
       environment = {
@@ -49,6 +64,7 @@ in
         AI_LOGS_PATH = "${aiDir}/logs";
         AI_STATE_PATH = "${aiDir}/state";
         AI_CACHE_PATH = "${aiDir}/cache";
+        PATH = "${pkgs.python3}/bin:${pkgs.git}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin";
       };
     };
   };
